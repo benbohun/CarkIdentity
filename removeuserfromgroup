@@ -1,11 +1,24 @@
 # Path to the CSV file
 $csvFilePath = "C:\Path\To\users.csv"
 
+# Path to log files
+$logPath = "C:\Path\To\Logs"
+$successLog = Join-Path -Path $logPath -ChildPath "SuccessLog.txt"
+$errorLog = Join-Path -Path $logPath -ChildPath "ErrorLog.txt"
+
 # Name of the Active Directory group
 $adGroup = "PAPM-Users"
 
 # Import Active Directory Module
 Import-Module ActiveDirectory
+
+# Ensure the log directory exists
+if (-Not (Test-Path $logPath)) {
+    New-Item -ItemType Directory -Path $logPath -Force | Out-Null
+}
+
+# Clear previous logs
+Remove-Item -Path $successLog, $errorLog -ErrorAction SilentlyContinue
 
 # Check if the CSV file exists
 if (-Not (Test-Path $csvFilePath)) {
@@ -33,10 +46,16 @@ foreach ($user in $users) {
         # Remove the user from the group
         Remove-ADGroupMember -Identity $adGroup -Members $adUser -Confirm:$false
 
-        Write-Host "Successfully removed $username from $adGroup" -ForegroundColor Green
+        # Log success
+        $logMessage = "[$(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')] SUCCESS: Removed $username from $adGroup"
+        Add-Content -Path $successLog -Value $logMessage
+        Write-Host $logMessage -ForegroundColor Green
     } catch {
-        Write-Host "Error processing $username: $($_.Exception.Message)" -ForegroundColor Red
+        # Log error
+        $errorMessage = "[$(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')] ERROR: $username - $($_.Exception.Message)"
+        Add-Content -Path $errorLog -Value $errorMessage
+        Write-Host $errorMessage -ForegroundColor Red
     }
 }
 
-Write-Host "Operation completed." -ForegroundColor Cyan
+Write-Host "Operation completed. Logs saved to $logPath" -ForegroundColor Cyan
