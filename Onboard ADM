@@ -1,0 +1,2034 @@
+#####################################################################
+#
+# AutoADMOnboard-v1.ps1
+# Updated to use 12_2 psPAS module
+#####################################################################
+<#
+.SYNOPSIS
+Archives previous day logs.
+Reads PAPM-Users-ADM group and compares to ADM accounts in PAPM.
+Generates a working data file for ADM accounts to onboard.
+Generates a decomm list for ADM accounts in PAPM that are not in PAPM-Users-ADM group.
+Onboards accounts from the data file generated.
+Logs accounts that are missing PAPM-Users group membership.
+Logs accounts that are not following naming standards.
+Logs decomm list to be used by separate auto decomm script.
+Logs onboarding actions.
+
+.DESCRIPTION
+This is an automated script ran by papmrestapi_svc account daily at 12AM and 12PM.
+
+#>
+
+#####################################################################
+
+
+
+
+#region SETUP
+
+#Variables
+$t = (Get-Date).tostring(“MM-dd-yyyy-HHmm”)
+$Magellan = "magellanhealth.com"
+$Managed    = $true
+$PrivAcct   = "ADM"
+$Platform   = "WIN-DOM-ADM"
+$SafeName   = "MBH-USR-"
+$Address    = "mbh.mhs.magellanhealth.com"
+$PlatformAccountProperties = @{ LogonDomain = $Address.split(".")[0]}
+$Result_DataToAdd = $null
+
+
+##Logging Variable
+
+
+$AddToVaultDataFile                    = "D:\Scripts\Data\$($PrivAcct)\Onboard\AddToVaultDataFile.csv"
+$LoggingFile                           = "D:\Scripts\Data\$($PrivAcct)\Onboard\LogFile.csv"
+$DecommAccountLog                      = "D:\Scripts\Data\$($PrivAcct)\Decomm\DecommAccounts.csv"
+
+$RequireADMNamingStandardLog           = "D:\Scripts\Data\$($PrivAcct)\ADMResults\RequireADMNamingStandard.txt"
+$RequireUsersGroupLog                  = "D:\Scripts\Data\$($PrivAcct)\ADMResults\RequireUsersGroup.txt"
+$ADMNotMatchStdAccountLog              = "D:\Scripts\Data\$($PrivAcct)\ADMResults\ADMNotMatchStdAccount.txt"
+$HistoryLoggingFile                    = "D:\Scripts\Data\$($PrivAcct)\ADMResults\ADMOnboardLogFile.csv"
+$PAPMErrorAccountLog                   = "D:\Scripts\Data\$($PrivAcct)\ADMResults\PAPMErrorAccount.txt"
+$DisabledUsersLog                      = "D:\Scripts\Data\$($PrivAcct)\ADMResults\DisabledUsers.txt"
+
+
+
+$ArchiveAddToVaultDataFile                     = "D:\Scripts\Data\$($PrivAcct)\Onboard\Archive\$($t)\AddToVaultDataFile_$($t).csv"
+$ArchiveDateFolder                             = "D:\Scripts\Data\$($PrivAcct)\Onboard\Archive\$($t)"
+$ArchiveLoggingFile                            = "D:\Scripts\Data\$($PrivAcct)\Onboard\Archive\$($t)\LogFile_$($t).csv"
+
+
+##LogArchival
+if (!(Test-Path $ArchiveDateFolder -PathType Container)) {New-Item -ItemType Directory -Force -Path $ArchiveDateFolder}
+if (Test-Path $AddToVaultDataFile) {Move-Item $AddToVaultDataFile $ArchiveAddToVaultDataFile}
+if (Test-Path $LoggingFile) {Move-Item $LoggingFile $ArchiveLoggingFile}
+
+##LogRemoval
+if (Test-Path $RequireUsersGroupLog) {Remove-Item $RequireUsersGroupLog}
+if (Test-Path $ADMNotMatchStdAccountLog) {Remove-Item $ADMNotMatchStdAccountLog}
+if (Test-Path $RequireADMNamingStandardLog) {Remove-Item $RequireADMNamingStandardLog}
+if (Test-Path $PAPMErrorAccountLog) {Remove-Item $PAPMErrorAccountLog}
+if (Test-Path $DisabledUsersLog) {Remove-Item $DisabledUsersLog}
+
+
+#region Define member and permissions
+
+##Log Start
+
+$LogObject = [PSCustomObject]@{
+LogType = "Informational"
+Object = "Script"
+Time = "$($t)"
+Detail = "Start of script"
+}
+$LogObject | Export-Csv -NoTypeInformation -Force $LoggingFile -Append
+
+
+
+##Read PAPM-Users group
+$Error.clear()
+$PAPMUsers = $null
+$PAPMUsers = (Get-ADGroupMember PAPM-Users)
+If ($Error) {
+
+#region email
+#Configure Email
+$emailSmtpServer = "relay.magellanhealth.com"
+$emailSmtpServerPort = "587"
+$emailSmtpUser = "PAPMSmtp_svc"
+$Password = Get-CCPCredential-WinAuth -appid "PAPMRestAPI" -safe "PAPM-DOM-SVC" -Username "PAPMSmtp_svc" -URL "https://PAPM-CCP-LTM.magellanhealth.com" -UseDefaultCredentials
+$emailSmtpPass = $Password.Content
+ 
+$emailFrom = "noreply-PAPMSupport@magellanhealth.com"
+$emailTo = "PAPMEngineering@magellanhealth.com"
+#$emailcc="CC"
+ 
+$emailMessage = New-Object System.Net.Mail.MailMessage( $emailFrom , $emailTo )
+#$emailMessage.cc.add($emailcc)
+$emailMessage.Subject = "Alert - Onboarding Script was interrrupted" 
+$emailMessage.IsBodyHtml = $false #true or false depends, if false, uncomment the text based body
+$emailMessage.Body = "
+[INFO] 
+The Onboarding script was interrupted.
+
+[ACTION] 
+Review AD connection or Module is available.
+
+[ERROR]
+$($Error)
+
+"
+
+$SMTPClient = New-Object System.Net.Mail.SmtpClient( $emailSmtpServer , $emailSmtpServerPort )
+$SMTPClient.EnableSsl = $False
+$SMTPClient.Credentials = New-Object System.Net.NetworkCredential( $emailSmtpUser , $emailSmtpPass );
+$SMTPClient.Send( $emailMessage )
+
+#endregion email
+
+$LogObject = [PSCustomObject]@{
+LogType = "Informational"
+Object = "Get-ADGroupMember"
+Time = "$($t)"
+Detail = "Failed to read accounts in PAPM-Users. Stopping script."
+}
+
+$LogObject | Export-Csv -NoTypeInformation -Force $LoggingFile -Append
+
+
+Break
+
+}
+If (!($PAPMUsers -eq $null)) {
+
+$LogObject = [PSCustomObject]@{
+LogType = "Informational"
+Object = "Get-ADGroupMember"
+Time = "$($t)"
+Detail = "Read accounts in PAPM-Users successfully."
+}
+
+$LogObject | Export-Csv -NoTypeInformation -Force $LoggingFile -Append
+}
+
+##Check for Disabled accounts
+$Error.clear()
+$DisabledResult = $null
+$DisabledResult = Get-ADGroupMember "PAPM-Users" -Recursive | %{Get-ADUser -Identity $_.distinguishedName -Properties Enabled} | ?{$_.Enabled -eq $false} |Select SamAccountName
+If ($Error) {
+
+#region email
+#Configure Email
+$emailSmtpServer = "relay.magellanhealth.com"
+$emailSmtpServerPort = "587"
+$emailSmtpUser = "PAPMSmtp_svc"
+$Password = Get-CCPCredential-WinAuth -appid "PAPMRestAPI" -safe "PAPM-DOM-SVC" -Username "PAPMSmtp_svc" -URL "https://PAPM-CCP-LTM.magellanhealth.com" -UseDefaultCredentials
+$emailSmtpPass = $Password.Content
+ 
+$emailFrom = "noreply-PAPMSupport@magellanhealth.com"
+$emailTo = "PAPMEngineering@magellanhealth.com"
+#$emailcc="CC"
+ 
+$emailMessage = New-Object System.Net.Mail.MailMessage( $emailFrom , $emailTo )
+#$emailMessage.cc.add($emailcc)
+$emailMessage.Subject = "Alert - Onboarding Script was interrrupted" 
+$emailMessage.IsBodyHtml = $false #true or false depends, if false, uncomment the text based body
+$emailMessage.Body = "
+[INFO] 
+The Onboarding script was interrupted.
+
+[ACTION] 
+Review AD connection or Module is available.
+
+[ERROR]
+$($Error)
+
+"
+
+$SMTPClient = New-Object System.Net.Mail.SmtpClient( $emailSmtpServer , $emailSmtpServerPort )
+$SMTPClient.EnableSsl = $False
+$SMTPClient.Credentials = New-Object System.Net.NetworkCredential( $emailSmtpUser , $emailSmtpPass );
+$SMTPClient.Send( $emailMessage )
+
+#endregion email
+
+$LogObject = [PSCustomObject]@{
+LogType = "Informational"
+Object = "Get-ADGroupMember"
+Time = "$($t)"
+Detail = "Failed to read accounts in PAPM-Users to capture disabled accounts. Stopping script."
+}
+
+$LogObject | Export-Csv -NoTypeInformation -Force $LoggingFile -Append
+
+
+Break
+
+}
+
+##Get members of PAPM-Users-ADM
+$Error.clear()
+$PrivUsersADM = @()
+$PAPMUsersADM = $null
+$PAPMUsersADM = (Get-ADGroupMember PAPM-Users-ADM)
+If ($Error) {
+
+#region email
+#Configure Email
+$emailSmtpServer = "relay.magellanhealth.com"
+$emailSmtpServerPort = "587"
+$emailSmtpUser = "PAPMSmtp_svc"
+$Password = Get-CCPCredential-WinAuth -appid "PAPMRestAPI" -safe "PAPM-DOM-SVC" -Username "PAPMSmtp_svc" -URL "https://PAPM-CCP-LTM.magellanhealth.com" -UseDefaultCredentials
+$emailSmtpPass = $Password.Content
+ 
+$emailFrom = "noreply-PAPMSupport@magellanhealth.com"
+$emailTo = "PAPMEngineering@magellanhealth.com"
+#$emailcc="CC"
+ 
+$emailMessage = New-Object System.Net.Mail.MailMessage( $emailFrom , $emailTo )
+#$emailMessage.cc.add($emailcc)
+$emailMessage.Subject = "Alert - Onboarding Script was interrrupted" 
+$emailMessage.IsBodyHtml = $false #true or false depends, if false, uncomment the text based body
+$emailMessage.Body = "
+[INFO] 
+The Onboarding script was interrupted.
+
+[ACTION] 
+Review AD connection or Module is available.
+
+[ERROR]
+$($Error)
+
+"
+
+$SMTPClient = New-Object System.Net.Mail.SmtpClient( $emailSmtpServer , $emailSmtpServerPort )
+$SMTPClient.EnableSsl = $False
+$SMTPClient.Credentials = New-Object System.Net.NetworkCredential( $emailSmtpUser , $emailSmtpPass );
+$SMTPClient.Send( $emailMessage )
+
+#endregion email
+
+$LogObject = [PSCustomObject]@{
+LogType = "Informational"
+Object = "Get-ADGroupMember"
+Time = "$($t)"
+Detail = "Failed to read accounts in PAPM-Users-ADM. Stopping Script."
+}
+
+$LogObject | Export-Csv -NoTypeInformation -Force $LoggingFile -Append
+
+
+Break
+
+}
+
+
+#Creating PrivUsersADM variable
+$Error.clear()
+If ($PAPMUsersADM){
+
+$PrivUsersADM = $PAPMUsersADM.SamAccountName     
+
+$LogObject = [PSCustomObject]@{
+LogType = "Informational"
+Object = "Get-ADGroupMember"
+Time = "$($t)"
+Detail = "Read accounts in PAPM-Users-ADM successfully."
+}
+
+$LogObject | Export-Csv -NoTypeInformation -Force $LoggingFile -Append
+
+}
+
+
+##Set variables for member permissions 
+	$RoleVaultUser = [PSCustomObject]@{
+	    UseAccounts                            = $true
+	    RetrieveAccounts                       = $true
+	    ListAccounts                           = $true
+	    UpdateAccountContent                   = $false
+	    InitiateCPMAccountManagementOperations = $true
+	    ViewAuditLog                           = $true
+	    ViewSafeMembers                        = $true
+	    AccessWithoutConfirmation              = $true
+	    UnlockAccounts                         = $false
+	}
+	
+	$RoleVaultAdmin = [PSCustomObject]@{
+	    UseAccounts                            = $false
+	    RetrieveAccounts                       = $false
+	    ListAccounts                           = $true
+	    AddAccounts                            = $true
+	    UpdateAccountContent                   = $true
+	    UpdateAccountProperties                = $true
+	    InitiateCPMAccountManagementOperations = $true
+	    SpecifyNextAccountContent              = $true
+	    RenameAccounts                         = $true
+	    DeleteAccounts                         = $true
+	    UnlockAccounts                         = $true
+	    ManageSafe                             = $true
+	    ManageSafeMembers                      = $true
+	    BackupSafe                             = $true
+	    ViewAuditLog                           = $true
+	    ViewSafeMembers                        = $true
+	    RequestsAuthorizationLevel1            = $true 
+	    RequestsAuthorizationLevel2            = $false
+	    AccessWithoutConfirmation              = $true
+	    CreateFolders                          = $true
+	    DeleteFolders                          = $true
+	    MoveAccountsAndFolders                 = $true
+	}
+	
+	$RoleSafeManager = [PSCustomObject]@{
+	    UseAccounts                            = $true
+	    RetrieveAccounts                       = $true
+	    ListAccounts                           = $true
+	    AddAccounts                            = $true
+	    UpdateAccountContent                   = $true
+	    UpdateAccountProperties                = $true
+	    InitiateCPMAccountManagementOperations = $true
+	    SpecifyNextAccountContent              = $true
+	    RenameAccounts                         = $true
+	    DeleteAccounts                         = $true
+	    UnlockAccounts                         = $true
+	    ManageSafe                             = $true
+	    ManageSafeMembers                      = $true
+	    ViewAuditLog                           = $true
+	    ViewSafeMembers                        = $true
+	    RequestsAuthorizationLevel1            = $true 
+	    RequestsAuthorizationLevel2            = $false            
+	    AccessWithoutConfirmation              = $true
+	    CreateFolders                          = $true
+	    DeleteFolders                          = $true
+	    MoveAccountsAndFolders                 = $true
+	}
+	
+	$RoleVaultAdminLocal = [PSCustomObject]@{
+	    UseAccounts                            = $true
+	    RetrieveAccounts                       = $true
+	    ListAccounts                           = $true
+	    AddAccounts                            = $true
+	    UpdateAccountContent                   = $true
+	    UpdateAccountProperties                = $true
+	    InitiateCPMAccountManagementOperations = $true
+	    SpecifyNextAccountContent              = $true
+	    RenameAccounts                         = $true
+	    DeleteAccounts                         = $true
+	    UnlockAccounts                         = $true
+	    ManageSafe                             = $true
+	    ManageSafeMembers                      = $true
+	    BackupSafe                             = $true
+	    ViewAuditLog                           = $true
+	    ViewSafeMembers                        = $true
+	    RequestsAuthorizationLevel1            = $true 
+	    RequestsAuthorizationLevel2            = $false
+	    AccessWithoutConfirmation              = $true
+	    CreateFolders                          = $true
+	    DeleteFolders                          = $true
+	    MoveAccountsAndFolders                 = $true
+	}
+
+
+#endregion Define member permissions
+
+
+#endregion SETUP
+
+#region PROCESS
+
+#region Logon
+
+$Error.clear()
+$Session = $null
+
+
+#Central Credential Provider
+
+Function PAPMAPIConnect {
+#Central Credential Provider
+$CCPAppName = "PAPMRestAPI"
+$CCPSafe = "PAPM-VAULT-API"
+$CCPUserName = "papmrestapi_local@cyberark.cloud.3761"
+$CCPResult = Get-CCPCredential-WinAuth -appid $CCPAppName -safe $CCPSafe -Username $CCPUserName -URL "https://PAPM-CCP-LTM.magellanhealth.com" -UseDefaultCredentials
+$mycred = $CCPResult.ToCredential()
+#Create session
+$Error.clear()
+$Session = $null
+New-PASSession -TenantSubdomain "magellanhealth" -Credential $mycred -IdentityUser
+$script:Session = Get-PASSession
+}
+
+#PAPMAPIConnect
+PAPMAPIConnect
+$Error.clear()
+
+If ($Session){
+
+    $LogObject = [PSCustomObject]@{
+    LogType = "Informational"
+    Object = "New-PASSession"
+    Time = "$($t)"
+    Detail = "PAS session established successfully"
+    }
+
+    $LogObject | Export-Csv -NoTypeInformation -Force $LoggingFile -Append
+
+}
+
+Else {
+
+    $LogObject = [PSCustomObject]@{
+    LogType = "Error"
+    Object = "New-PASSession"
+    Time = "$($t)"
+    Detail = "Session Error || $($Error[0].ScriptStackTrace) || $($Error[0].Exception)"
+    }
+
+    $LogObject | Export-Csv -NoTypeInformation -Force $LoggingFile -Append
+
+    Break
+
+}
+
+#endregion Logon
+
+
+#region Build Data for Priv Account Onboard
+
+
+
+##Prepare accounts for DECOMM list
+
+##Get existing Priv accounts in PAPM
+$Error.clear()
+$GetExistingPrivAccount = $null
+$GetExistingPrivAccount  = Get-PASAccount | Where-Object {(($_.SafeName -like "$($SafeName)*") -and ($_.userName -like "*_$($PrivAcct)") -and ($_.address -like $Address))}
+
+If ($Error) {
+
+#region email
+#Configure Email
+$emailSmtpServer = "relay.magellanhealth.com"
+$emailSmtpServerPort = "587"
+$emailSmtpUser = "PAPMSmtp_svc"
+$Password = Get-CCPCredential-WinAuth -appid "PAPMRestAPI" -safe "PAPM-DOM-SVC" -Username "PAPMSmtp_svc" -URL "https://PAPM-CCP-LTM.magellanhealth.com" -UseDefaultCredentials
+$emailSmtpPass = $Password.Content
+ 
+$emailFrom = "noreply-PAPMSupport@magellanhealth.com"
+$emailTo = "PAPMEngineering@magellanhealth.com"
+#$emailcc="CC"
+ 
+$emailMessage = New-Object System.Net.Mail.MailMessage( $emailFrom , $emailTo )
+#$emailMessage.cc.add($emailcc)
+$emailMessage.Subject = "Alert - Onboarding Script was interrrupted" 
+$emailMessage.IsBodyHtml = $false #true or false depends, if false, uncomment the text based body
+$emailMessage.Body = "
+[INFO] 
+The Onboarding script was interrupted.
+
+[ACTION] 
+Review logs as the search for Existing ADM accounts in CyberArk failed.
+
+[ERROR]
+$($Error)
+
+"
+
+$SMTPClient = New-Object System.Net.Mail.SmtpClient( $emailSmtpServer , $emailSmtpServerPort )
+$SMTPClient.EnableSsl = $False
+$SMTPClient.Credentials = New-Object System.Net.NetworkCredential( $emailSmtpUser , $emailSmtpPass );
+$SMTPClient.Send( $emailMessage )
+
+#endregion email
+
+
+
+$LogObject = [PSCustomObject]@{
+LogType = "Informational"
+Object = "GetExistingPrivAccount"
+Time = "$($t)"
+Detail = "Failed to read existing ADM accounts in PAPM."
+}
+
+$LogObject | Export-Csv -NoTypeInformation -Force $LoggingFile -Append
+
+Break
+
+}
+
+#Safety check to avoid issues
+If ($GetExistingPrivAccount -eq $null){
+
+#region email
+#Configure Email
+$emailSmtpServer = "relay.magellanhealth.com"
+$emailSmtpServerPort = "587"
+$emailSmtpUser = "PAPMSmtp_svc"
+$Password = Get-CCPCredential-WinAuth -appid "PAPMRestAPI" -safe "PAPM-DOM-SVC" -Username "PAPMSmtp_svc" -URL "https://PAPM-CCP-LTM.magellanhealth.com" -UseDefaultCredentials
+$emailSmtpPass = $Password.Content
+ 
+$emailFrom = "noreply-PAPMSupport@magellanhealth.com"
+$emailTo = "PAPMEngineering@magellanhealth.com"
+#$emailcc="CC"
+ 
+$emailMessage = New-Object System.Net.Mail.MailMessage( $emailFrom , $emailTo )
+#$emailMessage.cc.add($emailcc)
+$emailMessage.Subject = "Alert - Onboarding Script was interrrupted" 
+$emailMessage.IsBodyHtml = $false #true or false depends, if false, uncomment the text based body
+$emailMessage.Body = "
+[INFO] 
+The Onboarding script was interrupted.
+
+[ACTION] 
+Review logs as the search for Existing ADM accounts in CyberArk failed.
+
+[ERROR]
+No Errors reported by the Get-PASAccount command, but the variable for GetExistingPrivAccount is empty. Stopping Script.
+
+"
+
+$SMTPClient = New-Object System.Net.Mail.SmtpClient( $emailSmtpServer , $emailSmtpServerPort )
+$SMTPClient.EnableSsl = $False
+$SMTPClient.Credentials = New-Object System.Net.NetworkCredential( $emailSmtpUser , $emailSmtpPass );
+$SMTPClient.Send( $emailMessage )
+
+#endregion email
+
+
+
+$LogObject = [PSCustomObject]@{
+LogType = "Informational"
+Object = "GetExistingPrivAccount"
+Time = "$($t)"
+Detail = "No Errors reported by the Get-PASAccount command, but the variable for GetExistingPrivAccount is empty. Stopping Script."
+}
+
+$LogObject | Export-Csv -NoTypeInformation -Force $LoggingFile -Append
+
+Break
+
+}
+
+
+##Use existing _ADM accounts found in PAPM and compare if they are members of PAPM-Users-ADM
+$DecommAccount = @()
+
+ForEach ($ExistingPrivAccount in $GetExistingPrivAccount) {
+
+##Get list of Accounts to Decomm (ADM accounts in PAPM, but not in PAPM-Users-ADM) 
+    if((!($ExistingPrivAccount.userName -in $PrivUsersADM)) -and ($ExistingPrivAccount.safeName -like "$($SafeName)*") -and ($ExistingPrivAccount.address -like $Address)) {
+
+        
+        
+            $Decomm = @(
+
+            [pscustomobject]@{ 
+
+            AccountID                        = [string] $($ExistingPrivAccount.id);
+            SafeName                         = [string] $($ExistingPrivAccount.Safename);
+            Username                         = [string] $($ExistingPrivAccount.userName);
+            PlatformID                       = [string] $($ExistingPrivAccount.PlatformId);
+            Address                          = [string] $($ExistingPrivAccount.address)
+            
+            }
+  
+        )
+
+        $DecommAccount += $Decomm
+
+        Continue
+            
+    }
+
+
+        
+}
+ 
+#If needing Manual Run Add "<" to the beginning of next line to Comment out the finding.  After Running manually, reset.
+#
+If ($DecommAccount.count -gt 15){
+
+$ErrorManual = "Decomm list is greater than 15.  Please review list, investigate, and if accurate comment out the DecommAccount.count line."
+    
+#region email
+#Configure Email
+$emailSmtpServer = "relay.magellanhealth.com"
+$emailSmtpServerPort = "587"
+$emailSmtpUser = "PAPMSmtp_svc"
+$Password = Get-CCPCredential-WinAuth -appid "PAPMRestAPI" -safe "PAPM-DOM-SVC" -Username "PAPMSmtp_svc" -URL "https://PAPM-CCP-LTM.magellanhealth.com" -UseDefaultCredentials
+$emailSmtpPass = $Password.Content
+ 
+$emailFrom = "noreply-PAPMSupport@magellanhealth.com"
+$emailTo = "PAPMEngineering@magellanhealth.com"
+#$emailcc="CC"
+ 
+$emailMessage = New-Object System.Net.Mail.MailMessage( $emailFrom , $emailTo )
+#$emailMessage.cc.add($emailcc)
+$emailMessage.Subject = "Alert - Onboarding Script was interrrupted" 
+$emailMessage.IsBodyHtml = $false #true or false depends, if false, uncomment the text based body
+$emailMessage.Body = "
+[INFO] 
+The Onboarding script was interrupted.
+
+[ACTION] 
+Review Decomm list. 
+Current count: $($DecommAccount.count)
+If accurate, run Onboarding Script manually after commenting out the DecommAccount.count line.
+
+[ERROR]
+$($ErrorManual)
+$($DecommAccount | Format-List | Out-String)
+
+"
+
+$SMTPClient = New-Object System.Net.Mail.SmtpClient( $emailSmtpServer , $emailSmtpServerPort )
+$SMTPClient.EnableSsl = $False
+$SMTPClient.Credentials = New-Object System.Net.NetworkCredential( $emailSmtpUser , $emailSmtpPass );
+$SMTPClient.Send( $emailMessage )
+
+#endregion email
+
+$LogObject = [PSCustomObject]@{
+LogType = "Informational"
+Object = "DecommAccount"
+Time = "$($t)"
+Detail = "Script captured more than 15 Decomm accounts and will require a manual run after commenting out the decomm count line [~532]. Stopping script."
+}
+
+$LogObject | Export-Csv -NoTypeInformation -Force $LoggingFile -Append
+
+break
+
+}
+#>
+
+If ($DecommAccount) {
+
+$DecommAccount | Export-Csv -Path  $DecommAccountLog -NoTypeInformation
+
+$LogObject = [PSCustomObject]@{
+LogType = "Informational"
+Object = "Decomm Check"
+Time = "$($t)"
+Detail = "Found vaulted ADM accounts not in PAPM-Users-ADM AD group. Saved list to $($DecommAccountLog)"
+}
+
+$LogObject | Export-Csv -NoTypeInformation -Force $LoggingFile -Append
+
+}
+
+
+
+
+
+##Build Data file
+
+$DisabledUsers = @()
+$RequireUsersGroup = @()
+$ADMNotMatchStdAccount = @()
+$RequireADMNamingStandard = @()
+$AddToVaultData = @()
+
+
+##Get list of Accounts to Onboard (ADM accounts in PAPM-Users-ADM, but not in PAPM)
+$PrivUsers = @()
+
+ForEach ($PrivADM in $PrivUsersADM) {
+    
+    If (!($PrivADM -in $GetExistingPrivAccount.userName)){
+
+     $PrivUsers += $PrivADM 
+
+    }
+}
+
+#Safety check to avoid issues
+If ($PrivUsers.count -gt 20){
+$ErrorManual = $null
+$ErrorManual = "Onbopard list is greater than 20.  Please review list, investigate, and if accurate comment out the PrivUsers.count line [~629]."
+    
+#region email
+#Configure Email
+$emailSmtpServer = "relay.magellanhealth.com"
+$emailSmtpServerPort = "587"
+$emailSmtpUser = "PAPMSmtp_svc"
+$Password = Get-CCPCredential-WinAuth -appid "PAPMRestAPI" -safe "PAPM-DOM-SVC" -Username "PAPMSmtp_svc" -URL "https://PAPM-CCP-LTM.magellanhealth.com" -UseDefaultCredentials
+$emailSmtpPass = $Password.Content
+ 
+$emailFrom = "noreply-PAPMSupport@magellanhealth.com"
+$emailTo = "PAPMEngineering@magellanhealth.com"
+#$emailcc="CC"
+ 
+$emailMessage = New-Object System.Net.Mail.MailMessage( $emailFrom , $emailTo )
+#$emailMessage.cc.add($emailcc)
+$emailMessage.Subject = "Alert - Onboarding Script was interrrupted" 
+$emailMessage.IsBodyHtml = $false #true or false depends, if false, uncomment the text based body
+$emailMessage.Body = "
+[INFO] 
+The Onboarding script was interrupted.
+
+[ACTION] 
+Review PrivUsers list. 
+Current count: $($PrivUsers.count)
+If accurate, run Onboarding Script manually after commenting out the$PrivUsers.count line.
+
+[ERROR]
+$($ErrorManual)
+$($PrivUsers | Format-List | Out-String)
+
+"
+
+$SMTPClient = New-Object System.Net.Mail.SmtpClient( $emailSmtpServer , $emailSmtpServerPort )
+$SMTPClient.EnableSsl = $False
+$SMTPClient.Credentials = New-Object System.Net.NetworkCredential( $emailSmtpUser , $emailSmtpPass );
+$SMTPClient.Send( $emailMessage )
+
+#endregion email
+
+$LogObject = [PSCustomObject]@{
+LogType = "Informational"
+Object = "OnboardAccount"
+Time = "$($t)"
+Detail = "Script captured more than 20 Onboard accounts and will require a manual run after commenting out the PrivUsers count line [~629]. Stopping script."
+}
+
+$LogObject | Export-Csv -NoTypeInformation -Force $LoggingFile -Append
+
+break
+
+}
+
+
+
+ForEach ($PrivUser in $PrivUsers) {
+ 
+
+    
+    $LogObject = [PSCustomObject]@{
+    LogType = "Informational"
+    Object = "ForEach"
+    Time = "$($t)"
+    Detail = "Running pre-checks on $($PrivUser.split("_")[0])..."
+    }
+
+    $LogObject | Export-Csv -NoTypeInformation -Force $LoggingFile -Append
+
+##Check if the admin account is named correctly.
+    if ($Privuser -like "*_ADM") {
+
+    $LogObject = [PSCustomObject]@{
+    LogType = "Informational"
+    Object = "ForEach"
+    Time = "$($t)"
+    Detail = "$($PrivUser) account meets ADM naming standard."
+    }
+
+    $LogObject | Export-Csv -NoTypeInformation -Force $LoggingFile -Append
+
+    $PrivUser = $PrivUser.split("_")[0]
+    
+    }
+
+    else {
+
+    $RequireADMNamingStandard += $PrivUser 
+
+    $LogObject = [PSCustomObject]@{
+    LogType = "Warning"
+    Object = "ForEach"
+    Time = "$($t)"
+    Detail = "$($PrivUser): naming standard not met. Skipping and logging to $($RequireADMNamingStandardLog)."
+    }
+
+    $LogObject | Export-Csv -NoTypeInformation -Force $LoggingFile -Append
+
+    continue
+
+    }
+
+
+##For the following checks, the Privuser variable is now holding standard account name
+##Check if the user's regular account is disabled.    
+
+   if (!($PrivUser -in $DisabledResult.SamAccountName)) {
+        
+        
+        $LogObject = [PSCustomObject]@{
+        LogType = "Informational"
+        Object = "ForEach"
+        Time = "$($t)"
+        Detail = "$($PrivUser) account is active in AD. "
+        }
+
+        $LogObject | Export-Csv -NoTypeInformation -Force $LoggingFile -Append 
+        
+    }
+
+
+    else {
+
+        $DisabledUsers += $PrivUser 
+        
+        $LogObject = [PSCustomObject]@{
+        LogType = "Warning"
+        Object = "PAPM-Users"
+        Time = "$($t)"
+        Detail = "Account: $($PrivUser) is disabled in AD.  Skipping and logging to $($DisabledUsersLog)."
+        }
+        $LogObject | Export-Csv -NoTypeInformation -Force $LoggingFile -Append
+
+        Continue
+
+    }
+   
+##Check if the user's regular account is in PAPM-Users group.    
+
+   if ($PrivUser -in $PAPMUsers.SamAccountName) {
+    
+        
+        $LogObject = [PSCustomObject]@{
+        LogType = "Informational"
+        Object = "PAPM-Users"
+        Time = "$($t)"
+        Detail = "$($PrivUser) is a member of PAPM-Users AD group."
+        }
+        $LogObject | Export-Csv -NoTypeInformation -Force $LoggingFile -Append
+
+        
+    }
+
+   #Check if user's regular account in AD orif ADM account naming standard is correct
+   Else {
+        $InAD = $null
+        $InAD = Get-ADUser $PrivUser -ErrorAction SilentlyContinue
+
+            If ($InAD) {
+                $RequireUsersGroup += $PrivUser 
+        
+                $LogObject = [PSCustomObject]@{
+                LogType = "Warning"
+                Object = "PAPM-Users"
+                Time = "$($t)"
+                Detail = "$($PrivUser) not in PAPM-Users AD group.  Skipping and logging to $($RequireUsersGroupLog)."
+                }
+                $LogObject | Export-Csv -NoTypeInformation -Force $LoggingFile -Append
+
+                Continue
+            }
+            ElseIf (!($InAD)){
+                $ADMNotMatchStdAccount += "$($PrivUser)_ADM"
+                $LogObject = [PSCustomObject]@{
+                LogType = "Warning"
+                Object = "PAPM-Users"
+                Time = "$($t)"
+                Detail = "$($PrivUser)_ADM does not match standard account name.  Skipping and logging to $($ADMNotMatchStdAccountLog)."
+                }
+                $LogObject | Export-Csv -NoTypeInformation -Force $LoggingFile -Append
+
+                Continue
+            }
+    }
+
+
+
+    
+##Check if the Priv ADM account already exists in PAPM, second check.
+    
+    if ("$($PrivUser)_$($PrivAcct)" -in $GetExistingPrivAccount.userName) {
+        
+            
+        $LogObject = [PSCustomObject]@{
+        LogType = "Informational"
+        Object = "Get-PASAccount"
+        Time = "$($t)"
+        Detail = "$($PrivUser)_$($PrivAcct) already exists in PAPM."
+        }
+        $LogObject | Export-Csv -NoTypeInformation -Force $LoggingFile -Append
+
+
+        continue
+
+    }
+
+
+
+##Validates Priv account not in PAPM, then populates data file to Vault Priv account that is not in PAPM.
+    
+    Else {
+
+        
+
+        ##Get the UPN of the weak user account related to Priv account.
+        $UPN = $null
+
+        $UPN = (get-aduser $PrivUser).UserPrincipalName
+        
+        ##Add vault data to file
+        $AddToVault = @(
+
+            [pscustomobject]@{ 
+
+            SafeName                         = [string] "$($SafeName)$($PrivUser)";
+            Username                         = [string] "$($PrivUser)_$($PrivAcct)"; 
+            MemberLocation                   = [string] $Magellan;
+            ManagingCPM                      = [string] "CPM-1";
+            PlatformID                       = [string] $Platform;
+            Address                          = [string] $Address;
+            NumberOfVersionsRetention        = [int]"7";
+            UPN                              = [string] "$($UPN)"
+            }
+  
+        )
+
+        $AddToVaultData += $AddToVault
+
+        $LogObject = [PSCustomObject]@{
+        LogType = "Informational"
+        Object = "AddToVault Array"
+        Time = "$($t)"
+        Detail = "$($PrivUser)_$($PrivAcct) added to AddToVaultDataFile "
+        }
+        $LogObject | Export-Csv -NoTypeInformation -Force $LoggingFile -Append
+
+
+    }
+
+}
+
+If ($DisabledUsers) {$DisabledUsers | Out-File $DisabledUsersLog -Force}
+
+If ($RequireADMNamingStandard) {$RequireADMNamingStandard | Out-File $RequireADMNamingStandardLog -Force}
+
+If ($ADMNotMatchStdAccount) {$ADMNotMatchStdAccount | Out-File $ADMNotMatchStdAccountLog -Force}
+
+If ($RequireUsersGroup) {$RequireUsersGroup | Out-File $RequireUsersGroupLog -Force}
+
+If ($AddToVaultData) {$AddToVaultData | Export-Csv -Path  $AddToVaultDataFile -Append -NoTypeInformation}
+
+#endregion Build Data for Priv Account Onboard
+
+
+#region Process Data
+
+$ImportData = $null
+$PAPMErrorAccount = @()
+
+
+If ($AddToVaultData) {
+
+$ImportData = Import-Csv $AddToVaultDataFile
+
+ForEach ($Line in $ImportData) {
+
+    $CreateSafe = $null
+    $AddVaultUserMember = $null
+    $AddSafeManagerMember = $null
+    $AddPAPMVaultAdminsMember = $null
+    $CreatePrivAccount = $null
+    $LineUserPriv = $($line.Username)
+    $LineUser = $($line.Username).split("_")[0]
+
+    
+    $LogObject = [PSCustomObject]@{
+    LogType = "Informational"
+    Object = "ForEach"
+    Time = "$($t)"
+    Detail = "Working on $($LineUserPriv)"
+    }
+    $LogObject | Export-Csv -NoTypeInformation -Force $LoggingFile -Append
+
+    
+
+    #region Check for required data
+
+    If (!($Line.SafeName) -and !($Line.ManagingCPM) -and !($Line.NumberofVersionsRetention)) {
+
+        $LogObject = [PSCustomObject]@{
+        LogType = "Warning"
+        Object = "Import-Csv"
+        Time = "$($t)"
+        Detail = "$($LineUserPriv) is missing data. Skipping."
+        }
+        $LogObject | Export-Csv -NoTypeInformation -Force $LoggingFile -Append
+          
+
+        Continue
+    
+        }
+    #endregion Check for required data
+
+    #region Process Cases for Existing and Non-Existing SafeNames in PAPM
+
+    Else {
+
+    $Error.clear()
+        
+    $CheckForExistingSafe = Get-PASSafe -SafeName "$($Line.SafeName)" -ErrorAction SilentlyContinue
+
+        #region CASE: SafeName NOT Found in PAPM
+
+        If ($Error -and ($CheckForExistingSafe -eq $null)) {
+
+            $LogObject = [PSCustomObject]@{
+            LogType = "Informational"
+            Object = "Get-PASSafe"
+            Time = "$($t)"
+            Detail = "Safe not found for $($LineUserPriv). Creating safe."
+            }
+            $LogObject | Export-Csv -NoTypeInformation -Force $LoggingFile -Append
+
+            #region SUBCASE: Create Safe
+
+            Try {
+
+                $Error.clear()
+
+                Add-PASSafe -SafeName $line.SafeName -ManagingCPM $line.ManagingCPM -NumberOfVersionsRetention $line.NumberOfVersionsRetention -Verbose -ErrorAction SilentlyContinue
+                
+                $CreateSafe = $true
+
+                $LogObject = [PSCustomObject]@{
+                LogType = "Informational"
+                Object = "Add-PASSafe"
+                Time = "$($t)"
+                Detail = "Created Safe: $($Line.SafeName)"
+                }
+                $LogObject | Export-Csv -NoTypeInformation -Force $LoggingFile -Append
+                
+                
+
+            }
+
+            Catch {
+            
+                $LogObject = [PSCustomObject]@{
+                LogType = "Error"
+                Object = "Add-PASSafe"
+                Time = "$($t)"
+                Detail = "Trouble creating safe: $($Line.SafeName) || $($Error[0].ScriptStackTrace) || $($Error[0].Exception)"
+                }
+                $LogObject | Export-Csv -NoTypeInformation -Force $LoggingFile -Append
+
+                $CreateSafe = $false
+
+                $PAPMErrorAccount += $LineUserPriv
+
+                continue
+
+            }
+
+            #endregion SUBCASE: Create Safe
+
+            #region SUBCASE: Create Safe Members
+
+            ##Adding PAPM Vault Administrator Local
+            If ($CreateSafe) {
+
+                Try {
+            
+                    $Error.clear()
+            
+                    $RoleVaultAdminLocal | Add-PASSafeMember -SafeName $line.SafeName -memberType User -MemberName "magellanhealth_admin@cyberark.cloud.3761" -ErrorAction SilentlyContinue # -SearchIn "Vault" -ErrorAction SilentlyContinue
+
+
+                    $AddPAPMVaultAdminsMemberLocal = $true
+
+                    $LogObject = [PSCustomObject]@{
+                    LogType = "Informational"
+                    Object = "Add-PASSafeMember"
+                    Time = "$($t)"
+                    Detail = "Safe Member Added: magellanhealth_admin@cyberark.cloud.3761"
+                    }
+                    $LogObject | Export-Csv -NoTypeInformation -Force $LoggingFile -Append
+
+
+                }
+
+                Catch {
+
+                
+                    $LogObject = [PSCustomObject]@{
+                    LogType = "Error"
+                    Object = "Add-PASSafeMember"
+                    Time = "$($t)"
+                    Detail = "magellanhealth_admin@cyberark.cloud.3761 || $($Error[0].ScriptStackTrace) || $($Error[0].Exception)"
+                    }
+                    $LogObject | Export-Csv -NoTypeInformation -Force $LoggingFile -Append
+
+                    
+                    $AddPAPMVaultAdminsMemberLocal = $false
+
+                    $PAPMErrorAccount += $LineUserPriv
+
+                    Continue
+
+                }
+
+            }
+
+            Else {
+
+                $LogObject = [PSCustomObject]@{
+                LogType = "Error"
+                Object = "Add-PASSafe"
+                Time = "$($t)"
+                Detail = "Failed to Create Safe: $($Line.SafeName)"
+                }
+                $LogObject | Export-Csv -NoTypeInformation -Force $LoggingFile -Append
+
+            }
+            
+            
+            
+            
+            ##Adding PAPM Vault Administrator
+            
+            If ($AddPAPMVaultAdminsMemberLocal) {
+
+                Try {
+            
+                    $Error.clear()
+            
+                    $RoleVaultAdmin | Add-PASSafeMember -SafeName $line.SafeName -memberType Group -MemberName "PAPM-VaultAdmins@mbh.mhs.magellanhealth.com" -ErrorAction SilentlyContinue # -SearchIn $Magellan -ErrorAction SilentlyContinue
+
+
+                    $AddPAPMVaultAdminsMember = $true
+
+                    $LogObject = [PSCustomObject]@{
+                    LogType = "Informational"
+                    Object = "Add-PASSafeMember"
+                    Time = "$($t)"
+                    Detail = "Safe Member Added: PAPM-VaultAdmins@mbh.mhs.magellanhealth.com"
+                    }
+                    $LogObject | Export-Csv -NoTypeInformation -Force $LoggingFile -Append
+                                  
+
+                }
+
+                Catch {
+                
+                    $LogObject = [PSCustomObject]@{
+                    LogType = "Error"
+                    Object = "Add-PASSafeMember"
+                    Time = "$($t)"
+                    Detail = "Trouble adding vault member: PAPM-VaultAdmins@mbh.mhs.magellanhealth.com || $($Error[0].ScriptStackTrace) || $($Error[0].Exception)"
+                    }
+                    $LogObject | Export-Csv -NoTypeInformation -Force $LoggingFile -Append
+
+                    $AddPAPMVaultAdminsMember = $false
+
+                    $PAPMErrorAccount += $LineUserPriv
+
+                    Continue
+
+                }
+
+            }
+
+            Else {
+
+                $LogObject = [PSCustomObject]@{
+                LogType = "Error"
+                Object = "Add-PASSafe"
+                Time = "$($t)"
+                Detail = "Failed to to add vault member: magellanhealth_admin@cyberark.cloud.3761"
+                }
+                $LogObject | Export-Csv -NoTypeInformation -Force $LoggingFile -Append
+
+            }
+
+            ##Adding  Privilege Cloud Safe Managers
+            If ($AddPAPMVaultAdminsMember) {
+
+                Try {
+            
+                    $Error.clear()
+                    #$RoleSafeManager | Add-PASSafeMember -SafeName $line.SafeName -memberType User -MemberName "Privilege Cloud Safe Managers@mbh.mhs.magellanhealth.com" -SearchIn $Magellan -ErrorAction SilentlyContinue
+                    $RoleName = "Privilege Cloud Safe Managers"
+                    $RoleSafeManager | Add-PASSafeMember -SafeName $line.SafeName -memberType Role -MemberName $RoleName -ErrorAction SilentlyContinue # -SearchIn "Vault" -ErrorAction SilentlyContinue
+                    
+
+
+                    $AddSafeManagerMember = $true       
+
+                    $LogObject = [PSCustomObject]@{
+                    LogType = "Informational"
+                    Object = "Add-PASSafeMember"
+                    Time = "$($t)"
+                    Detail = "Safe Member Added: Privilege Cloud Safe Managers"
+                    }
+                    $LogObject | Export-Csv -NoTypeInformation -Force $LoggingFile -Append
+
+                   
+
+                }
+
+                Catch {
+
+                    $LogObject = [PSCustomObject]@{
+                    LogType = "Error"
+                    Object = "Add-PASSafeMember"
+                    Time = "$($t)"
+                    Detail = "Trouble adding vault member: Privilege Cloud Safe Managers || $($Error[0].ScriptStackTrace) || $($Error[0].Exception)"
+                    }
+                    $LogObject | Export-Csv -NoTypeInformation -Force $LoggingFile -Append
+
+                    $AddSafeManagerMember = $false
+
+                    $PAPMErrorAccount += $LineUserPriv
+
+                    Continue
+
+                }
+
+            }
+
+            Else {
+
+                $LogObject = [PSCustomObject]@{
+                LogType = "Error"
+                Object = "Add-PASSafeMember"
+                Time = "$($t)"
+                Detail = "Failed to to add vault member: Privilege Cloud Safe Managers"
+                }
+                $LogObject | Export-Csv -NoTypeInformation -Force $LoggingFile -Append
+
+            }
+
+            ##Adding  PAPM Vault User
+            If ($AddSafeManagerMember) {
+
+                Try {
+            
+                    $Error.clear()
+
+                    $RoleVaultUser | Add-PASSafeMember -SafeName $line.SafeName -memberType User -MemberName $line.UPN -ErrorAction SilentlyContinue # -SearchIn $Magellan -ErrorAction SilentlyContinue
+
+                    $AddVaultUserMember = $true
+
+                    $LogObject = [PSCustomObject]@{
+                    LogType = "Informational"
+                    Object = "Add-PASSafeMember"
+                    Time = "$($t)"
+                    Detail = "Safe Member Added: $($line.UPN)"
+                    }
+                    $LogObject | Export-Csv -NoTypeInformation -Force $LoggingFile -Append
+
+
+                }
+
+                Catch {
+
+                    $LogObject = [PSCustomObject]@{
+                    LogType = "Error"
+                    Object = "Add-PASSafeMember"
+                    Time = "$($t)"
+                    Detail = "Trouble adding vault member: $($line.UPN) || $($Error[0].ScriptStackTrace) || $($Error[0].Exception)"
+                    }
+                    $LogObject | Export-Csv -NoTypeInformation -Force $LoggingFile -Append
+
+                    $AddVaultUserMember = $false
+
+                    $PAPMErrorAccount += $LineUserPriv
+
+                    Continue
+
+                }
+
+            }
+
+            Else {
+
+                $LogObject = [PSCustomObject]@{
+                LogType = "Error"
+                Object = "Add-PASSafeMember"
+                Time = "$($t)"
+                Detail = "Failed to to add vault member: Privilege Cloud Safe Managers"
+                }
+                $LogObject | Export-Csv -NoTypeInformation -Force $LoggingFile -Append
+
+            }
+
+            #endregion SUBCASE: Create Safe Members        
+
+            #region SUBCASE: Vault Priv account 
+
+            If ($AddPAPMVaultAdminsMemberLocal -and $AddPAPMVaultAdminsMember -and $AddVaultUserMember -and $AddSafeManagerMember) {
+
+                Try {
+                
+                    $Error.clear()
+                
+                    $Result_AddPASAccount = $null
+
+                    $Result_AddPASAccount = Add-PASAccount -address $Line.Address -userName $LineUserPriv -platformID $Line.PlatformID -SafeName $Line.SafeName -automaticManagementEnabled $Managed -platformAccountProperties $PlatformAccountProperties -ErrorAction SilentlyContinue
+           
+                    $CreatePrivAccount = $true   
+                        
+                    $LogObject = [PSCustomObject]@{
+                    LogType = "Informational"
+                    Object = "Add-PASAccount"
+                    Time = "$($t)"
+                    Detail = "Created account: $($LineUserPriv)"
+                    }
+                    $LogObject | Export-Csv -NoTypeInformation -Force $LoggingFile -Append
+                        
+                    $HistoryLogObject = [PSCustomObject]@{
+                    ADMAccount = "$($LineUserPriv)"
+                    OnboardDate = "$($t)"
+                    }
+                    $HistoryLogObject | Export-Csv -NoTypeInformation -Force $HistoryLoggingFile -Append 
+
+
+                }
+
+                Catch {
+                    
+                    $LogObject = [PSCustomObject]@{
+                    LogType = "Error"
+                    Object = "Add-PASAccount"
+                    Time = "$($t)"
+                    Detail = "Trouble creating account: $($LineUserPriv) || $($Error[0].ScriptStackTrace) || $($Error[0].Exception)"
+                    }
+                    $LogObject | Export-Csv -NoTypeInformation -Force $LoggingFile -Append
+
+                    $CreatePrivAccount = $false
+
+                    $PAPMErrorAccount += $LineUserPriv
+
+                    continue
+
+                }
+
+            }
+
+            Else {
+
+                $LogObject = [PSCustomObject]@{
+                LogType = "Error"
+                Object = "Add-PASSafeMember"
+                Time = "$($t)"
+                Detail = "Failed to to add vault member:$($line.UPN)"
+                }
+                $LogObject | Export-Csv -NoTypeInformation -Force $LoggingFile -Append
+
+            }
+    
+            #endregion SUBCASE: Vault Priv account
+
+            #region SUBCASE: Reconcile Priv Account
+
+            If ($Managed -and $CreatePrivAccount) {
+
+                Try {
+            
+                    $Error.clear()
+
+                    $AccountID = $null
+
+                    $AccountID = $Result_AddPASAccount.id
+
+                    Invoke-PASCPMOperation -AccountID $AccountID -ReconcileTask -ErrorAction SilentlyContinue
+
+
+                    $ReconcileAccount = $true
+                        
+                    $LogObject = [PSCustomObject]@{
+                    LogType = "Informational"
+                    Object = "Invoke-PASCPMOperation"
+                    Time = "$($t)"
+                    Detail = "Reconciled $($PrivAcct) account: $($Result_AddPASAccount.userName)"
+                    }
+                    $LogObject | Export-Csv -NoTypeInformation -Force $LoggingFile -Append       
+
+            
+                }
+            
+                Catch {
+ 
+                    $LogObject = [PSCustomObject]@{
+                    LogType = "Error"
+                    Object = "Invoke-PASCPMOperation"
+                    Time = "$($t)"
+                    Detail = "Trouble reconciling $($PrivAcct) account: $($Result_AddPASAccount.userName) || $($Error[0].ScriptStackTrace) || $($Error[0].Exception)"
+                    }
+                    $LogObject | Export-Csv -NoTypeInformation -Force $LoggingFile -Append
+                    
+                    $ReconcileAccount = $false
+                    
+                    $PAPMErrorAccount += $LineUserPriv
+
+                    continue
+            
+                }
+
+            }
+
+            Elseif (!($CreatePrivAccount)) {
+                    
+                    $LogObject = [PSCustomObject]@{
+                    LogType = "Error"
+                    Object = "Invoke-PASCPMOperation"
+                    Time = "$($t)"
+                    Detail = "Failed to create $($PrivAcct) account: $($LineUserPriv)"
+                    }
+                    $LogObject | Export-Csv -NoTypeInformation -Force $LoggingFile -Append
+                
+            }
+        
+
+        #endregion SUBCASE: Reconcile Priv Account
+                             
+        }
+        
+        #endregion CASE: SafeName NOT Found in PAPM         
+
+        #region CASE: SafeName Found in PAPM
+
+        Elseif ($CheckForExistingSafe -ne $null) {
+
+            $LogObject = [PSCustomObject]@{
+            LogType = "Informational"
+            Object = "Get-PASSafe"
+            Time = "$($t)"
+            Detail = "Safe found for $($LineUser). Updating members and permissions."
+            }
+            $LogObject | Export-Csv -NoTypeInformation -Force $LoggingFile -Append
+    
+            
+            #region SUBCASE: Check for Existing Safe Members and set permissions 
+
+            $Error.clear()
+
+            $CheckForExistingSafeMember = (Get-PASSafeMember -SafeName $Line.SafeName -ErrorAction SilentlyContinue).Username
+
+            If ($Error) {
+                
+                $LogObject = [PSCustomObject]@{
+                LogType = "Error"
+                Object = "Get-PASSafeMember"
+                Time = "$($t)"
+                Detail = "$($Error[0].ScriptStackTrace) || $($Error[0].Exception)"
+                }
+                $LogObject | Export-Csv -NoTypeInformation -Force $LoggingFile -Append
+
+                Continue
+            }
+
+            else {
+
+                #region PAPM Vault Admins
+
+                ##Adding PAPM Vault Administrator Local
+                If (!("magellanhealth_admin@cyberark.cloud.3761" -in $CheckForExistingSafeMember)) {
+
+                    Try {
+            
+                        $Error.clear()
+            
+                        $RoleVaultAdminLocal | Add-PASSafeMember -SafeName $line.SafeName -memberType User -MemberName "magellanhealth_admin@cyberark.cloud.3761" -ErrorAction SilentlyContinue # -SearchIn "Vault" -ErrorAction SilentlyContinue
+            
+                        $AddPAPMVaultAdminsMemberLocal = $true 
+                            
+                        $LogObject = [PSCustomObject]@{
+                        LogType = "Informational"
+                        Object = "Add-PASSafeMember"
+                        Time = "$($t)"
+                        Detail = "Safe Member Added: magellanhealth_admin@cyberark.cloud.3761"
+                        }
+                        $LogObject | Export-Csv -NoTypeInformation -Force $LoggingFile -Append
+                                  
+
+
+                    }
+
+                    Catch {
+                        
+                        $LogObject = [PSCustomObject]@{
+                        LogType = "Error"
+                        Object = "Add-PASSafeMember"
+                        Time = "$($t)"
+                        Detail = "Trouble adding vault member: magellanhealth_admin@cyberark.cloud.3761 || $($Error[0].ScriptStackTrace) || $($Error[0].Exception)"
+                        }
+                        $LogObject | Export-Csv -NoTypeInformation -Force $LoggingFile -Append
+                        
+                        $AddPAPMVaultAdminsMemberLocal = $false
+
+                        $PAPMErrorAccount += $LineUserPriv
+
+                        continue
+
+                    }
+
+                }
+
+                Else {
+
+                    $LogObject = [PSCustomObject]@{
+                    LogType = "Warning"
+                    Object = "Add-PASSafeMember"
+                    Time = "$($t)"
+                    Detail = "magellanhealth_admin@cyberark.cloud.3761 already exists, Setting permissions"
+                    }
+                    $LogObject | Export-Csv -NoTypeInformation -Force $LoggingFile -Append
+
+                    
+                    ##Updating PAPM Vault Administrator Local
+                    Try {
+            
+                        $Error.clear()
+            
+                        $RoleVaultAdminLocal | Set-PASSafeMember -SafeName $line.SafeName -MemberName "magellanhealth_admin@cyberark.cloud.3761" -ErrorAction SilentlyContinue
+
+            
+                        $AddPAPMVaultAdminsMemberLocal = $true
+                            
+                        $LogObject = [PSCustomObject]@{
+                        LogType = "Informational"
+                        Object = "Set-PASSafeMember"
+                        Time = "$($t)"
+                        Detail = "Safe Member set: magellanhealth_admin@cyberark.cloud.3761"
+                        }
+                        $LogObject | Export-Csv -NoTypeInformation -Force $LoggingFile -Append       
+
+
+                    }
+
+                    Catch {
+
+                        $LogObject = [PSCustomObject]@{
+                        LogType = "Error"
+                        Object = "Set-PASSafeMember"
+                        Time = "$($t)"
+                        Detail = "Trouble setting vault member: magellanhealth_admin@cyberark.cloud.3761 || $($Error[0].ScriptStackTrace) || $($Error[0].Exception)"
+                        }
+                        $LogObject | Export-Csv -NoTypeInformation -Force $LoggingFile -Append
+
+                        $AddPAPMVaultAdminsMemberLocal = $false
+
+                        $PAPMErrorAccount += $LineUserPriv
+
+                        continue
+
+                    }
+
+                }
+
+                ##Adding  PAPM Vault Administrator
+                If (!("PAPM-VaultAdmins@mbh.mhs.magellanhealth.com" -in $CheckForExistingSafeMember)) {
+
+                    Try {
+            
+                        $Error.clear()
+            
+                        $RoleVaultAdmin | Add-PASSafeMember -SafeName $line.SafeName -memberType Group -MemberName "PAPM-VaultAdmins@mbh.mhs.magellanhealth.com" -ErrorAction SilentlyContinue # -SearchIn $Magellan -ErrorAction SilentlyContinue
+
+
+                        $AddPAPMVaultAdminsMember = $true 
+                            
+                        $LogObject = [PSCustomObject]@{
+                        LogType = "Informational"
+                        Object = "Add-PASSafeMember"
+                        Time = "$($t)"
+                        Detail = "Safe Member Added: PAPM-VaultAdmins@mbh.mhs.magellanhealth.com"
+                        }
+                        $LogObject | Export-Csv -NoTypeInformation -Force $LoggingFile -Append
+                                  
+
+                    }
+
+                    Catch {
+                        
+                        $LogObject = [PSCustomObject]@{
+                        LogType = "Error"
+                        Object = "Add-PASSafeMember"
+                        Time = "$($t)"
+                        Detail = "Trouble adding vault member: PAPM-VaultAdmins@mbh.mhs.magellanhealth.com || $($Error[0].ScriptStackTrace) || $($Error[0].Exception)"
+                        }
+                        $LogObject | Export-Csv -NoTypeInformation -Force $LoggingFile -Append
+                        
+                        $AddPAPMVaultAdminsMember = $false
+                        
+                        $PAPMErrorAccount += $LineUserPriv
+
+                        continue
+
+                    }
+
+                }
+
+                Else {
+
+                    $LogObject = [PSCustomObject]@{
+                    LogType = "Warning"
+                    Object = "Add-PASSafeMember"
+                    Time = "$($t)"
+                    Detail = "PAPM-VaultAdmins@mbh.mhs.magellanhealth.com already exists, Setting permissions"
+                    }
+                    $LogObject | Export-Csv -NoTypeInformation -Force $LoggingFile -Append
+
+                    
+                    ##Updating PAPM Vault Administrator
+                    Try {
+            
+                        $Error.clear()
+            
+                        $RoleVaultAdmin | Set-PASSafeMember -SafeName $line.SafeName -MemberName "PAPM-VaultAdmins@mbh.mhs.magellanhealth.com" -ErrorAction SilentlyContinue
+
+            
+                        $AddPAPMVaultAdminsMember = $true
+                            
+                        $LogObject = [PSCustomObject]@{
+                        LogType = "Informational"
+                        Object = "Set-PASSafeMember"
+                        Time = "$($t)"
+                        Detail = "Safe Member set: PAPM-VaultAdmins@mbh.mhs.magellanhealth.com"
+                        }
+                        $LogObject | Export-Csv -NoTypeInformation -Force $LoggingFile -Append       
+
+
+                    }
+
+                    Catch {
+
+                        $LogObject = [PSCustomObject]@{
+                        LogType = "Error"
+                        Object = "Set-PASSafeMember"
+                        Time = "$($t)"
+                        Detail = "Trouble setting vault member: PAPM-VaultAdmins@mbh.mhs.magellanhealth.com || $($Error[0].ScriptStackTrace) || $($Error[0].Exception)"
+                        }
+                        $LogObject | Export-Csv -NoTypeInformation -Force $LoggingFile -Append
+
+                        $AddPAPMVaultAdminsMember = $false
+
+                        $PAPMErrorAccount += $LineUserPriv
+
+                        continue
+
+                    }
+
+                }
+
+                #endregion PAPM Vault Admins
+
+                #region Privilege Cloud Safe Managers
+                
+                ##Adding  Privilege Cloud Safe Managers
+                If (!("Privilege Cloud Safe Managers" -in $CheckForExistingSafeMember)) {
+
+                    Try {
+            
+                        $Error.clear()
+                        $RoleName = "Privilege Cloud Safe Managers"
+                        $RoleSafeManager | Add-PASSafeMember -SafeName $line.SafeName -memberType Role -MemberName $RoleName -ErrorAction SilentlyContinue # -SearchIn "Vault" -ErrorAction SilentlyContinue
+
+
+                        $AddSafeManagerMember = $true
+                            
+                        $LogObject = [PSCustomObject]@{
+                        LogType = "Informational"
+                        Object = "Add-PASSafeMember"
+                        Time = "$($t)"
+                        Detail = "Safe Member Added: Privilege Cloud Safe Managers"
+                        }
+                        $LogObject | Export-Csv -NoTypeInformation -Force $LoggingFile -Append       
+
+
+
+                    }
+
+                    Catch {
+
+                        $LogObject = [PSCustomObject]@{
+                        LogType = "Error"
+                        Object = "Add-PASSafeMember"
+                        Time = "$($t)"
+                        Detail = "Trouble Adding vault member: Privilege Cloud Safe Managers || $($Error[0].ScriptStackTrace) || $($Error[0].Exception)"
+                        }
+                        $LogObject | Export-Csv -NoTypeInformation -Force $LoggingFile -Append
+                    
+                        $AddSafeManagerMember = $false
+
+                        $PAPMErrorAccount += $LineUserPriv
+
+                        continue
+
+                    }
+
+                }
+
+                Else {
+
+                    $LogObject = [PSCustomObject]@{
+                    LogType = "Warning"
+                    Object = "Add-PASSafeMember"
+                    Time = "$($t)"
+                    Detail = "Privilege Cloud Safe Managers already exists, Setting permissions"
+                    }
+                    $LogObject | Export-Csv -NoTypeInformation -Force $LoggingFile -Append
+
+
+                    ##Updating Privilege Cloud Safe Managers
+                    Try {
+            
+                        $Error.clear()
+                        $RoleName = "Privilege Cloud Safe Managers"
+                        $RoleSafeManager | Set-PASSafeMember -SafeName $line.SafeName -MemberName $RoleName -ErrorAction SilentlyContinue
+
+            
+                        $AddSafeManagerMember = $true
+                            
+                        $LogObject = [PSCustomObject]@{
+                        LogType = "Informational"
+                        Object = "Set-PASSafeMember"
+                        Time = "$($t)"
+                        Detail = "Safe Member Set: Privilege Cloud Safe Managers"
+                        }
+                        $LogObject | Export-Csv -NoTypeInformation -Force $LoggingFile -Append     
+
+
+
+                    }
+
+                    Catch {
+
+                        $LogObject = [PSCustomObject]@{
+                        LogType = "Error"
+                        Object = "Set-PASSafeMember"
+                        Time = "$($t)"
+                        Detail = "Trouble setting vault member: Privilege Cloud Safe Managers || $($Error[0].ScriptStackTrace) || $($Error[0].Exception)"
+                        }
+                        $LogObject | Export-Csv -NoTypeInformation -Force $LoggingFile -Append
+
+                        $AddSafeManagerMember = $false
+                        
+                        $PAPMErrorAccount += $LineUserPriv
+
+                        continue
+
+                    }
+                }
+
+                #endregion Privilege Cloud Safe Managers
+        
+                #region Vault User
+
+                If (!($line.UPN -in $CheckForExistingSafeMember)) {
+
+                    Try {
+            
+                        $Error.clear()
+
+                        $RoleVaultUser | Add-PASSafeMember -SafeName $line.SafeName -memberType User -MemberName $line.UPN -ErrorAction SilentlyContinue # -SearchIn $Magellan -ErrorAction SilentlyContinue
+
+                    
+                        $AddVaultUserMember = $true
+
+                        $LogObject = [PSCustomObject]@{
+                        LogType = "Informational"
+                        Object = "Add-PASSafeMember"
+                        Time = "$($t)"
+                        Detail = "Safe Member Added: $($line.UPN)"
+                        }
+                        $LogObject | Export-Csv -NoTypeInformation -Force $LoggingFile -Append
+
+
+                    }
+
+                    Catch {
+
+                        $LogObject = [PSCustomObject]@{
+                        LogType = "Error"
+                        Object = "Add-PASSafeMember"
+                        Time = "$($t)"
+                        Detail = "Trouble adding vault member: $($line.UPN) || $($Error[0].ScriptStackTrace) || $($Error[0].Exception)"
+                        }
+                        $LogObject | Export-Csv -NoTypeInformation -Force $LoggingFile -Append
+                   
+                        $AddVaultUserMember = $false
+                        
+                        $PAPMErrorAccount += $LineUserPriv
+
+                        continue
+
+                    }
+
+                }
+
+                Else {
+
+                    $LogObject = [PSCustomObject]@{
+                    LogType = "Warning"
+                    Object = "Add-PASSafeMember"
+                    Time = "$($t)"
+                    Detail = "$($line.UPN) already exists, Setting permissions"
+                    }
+                    $LogObject | Export-Csv -NoTypeInformation -Force $LoggingFile -Append
+
+                    
+                    ##Updating PAPM VaultUser
+                    Try {
+            
+                        $Error.clear()
+            
+                        $RoleVaultUser | Set-PASSafeMember -SafeName $line.SafeName -MemberName $line.UPN -ErrorAction SilentlyContinue
+
+            
+                        $AddVaultUserMember = $true
+                            
+                        $LogObject = [PSCustomObject]@{
+                        LogType = "Informational"
+                        Object = "Set-PASSafeMember"
+                        Time = "$($t)"
+                        Detail = "Safe Member Set: $($line.UPN)"
+                        }
+                        $LogObject | Export-Csv -NoTypeInformation -Force $LoggingFile -Append      
+
+
+                    }
+
+                    Catch {
+
+                        $LogObject = [PSCustomObject]@{
+                        LogType = "Error"
+                        Object = "Set-PASSafeMember"
+                        Time = "$($t)"
+                        Detail = "Trouble setting vault member: $($line.UPN) || $($Error[0].ScriptStackTrace) || $($Error[0].Exception)"
+                        }
+                        $LogObject | Export-Csv -NoTypeInformation -Force $LoggingFile -Append
+
+                        $AddVaultUserMember = $false
+                        
+                        $PAPMErrorAccount += $LineUserPriv
+
+                        continue
+
+                    }
+                }
+
+                #endregion Vault User
+
+            }
+
+        #endregion SUBCASE: Check for Existing Safe Members and set permissions
+
+
+            #region SUBCASE: Create Priv Account
+
+            If ($AddPAPMVaultAdminsMemberLocal -and $AddPAPMVaultAdminsMember -and $AddVaultUserMember -and $AddSafeManagerMember) {
+
+                Try {
+                
+                    $Error.clear()
+                
+                    $Result_AddPASAccount = $null
+
+                    $Result_AddPASAccount = Add-PASAccount -address $Line.Address -userName $LineUserPriv -platformID $Line.PlatformID -SafeName $Line.SafeName -automaticManagementEnabled $Managed -platformAccountProperties $PlatformAccountProperties -ErrorAction SilentlyContinue
+
+  
+                    $CreatePrivAccount = $true
+                        
+                    $LogObject = [PSCustomObject]@{
+                    LogType = "Informational"
+                    Object = "Add-PASAccount"
+                    Time = "$($t)"
+                    Detail = "Created account: $($LineUserPriv)"
+                    }
+                    $LogObject | Export-Csv -NoTypeInformation -Force $LoggingFile -Append       
+
+                    $HistoryLogObject = [PSCustomObject]@{
+                    ADMAccount = "$($LineUserPriv)"
+                    OnboardDate = "$($t)"
+                    }
+                    $HistoryLogObject | Export-Csv -NoTypeInformation -Force $HistoryLoggingFile -Append 
+
+
+                }
+
+                Catch {
+
+                    $LogObject = [PSCustomObject]@{
+                    LogType = "Error"
+                    Object = "Add-PASAccount"
+                    Time = "$($t)"
+                    Detail = "Trouble creating account: $($LineUserPriv) || $($Error[0].ScriptStackTrace) || $($Error[0].Exception)"
+                    }
+                    $LogObject | Export-Csv -NoTypeInformation -Force $LoggingFile -Append
+                   
+                    $CreatePrivAccount = $false
+                    
+                    $PAPMErrorAccount += $LineUserPriv
+
+                    continue
+
+                }
+
+            }
+
+            Else {
+
+                $LogObject = [PSCustomObject]@{
+                LogType = "Error"
+                Object = "Add-PASSafeMember"
+                Time = "$($t)"
+                Detail = "Failed to add or set SafeMembers"
+                }
+                $LogObject | Export-Csv -NoTypeInformation -Force $LoggingFile -Append
+
+            }
+    
+            #endregion SUBCASE: Create Priv Account
+            
+            #region SUBCASE: Reconcile Priv Account
+
+            If ($Managed -and $CreatePrivAccount) {
+
+                Try {
+            
+                    $Error.clear()
+
+                    $AccountID = $null
+
+                    $AccountID = $Result_AddPASAccount.id
+
+                    Invoke-PASCPMOperation -AccountID $AccountID -ReconcileTask -ErrorAction SilentlyContinue
+
+
+                    $ReconcileAccount = $true
+                        
+                    $LogObject = [PSCustomObject]@{
+                    LogType = "Informational"
+                    Object = "Invoke-PASCPMOperation"
+                    Time = "$($t)"
+                    Detail = "Reconciled $($PrivAcct) account: $($Result_AddPASAccount.userName)"
+                    }
+                    $LogObject | Export-Csv -NoTypeInformation -Force $LoggingFile -Append       
+
+            
+                }
+            
+                Catch {
+ 
+                    $LogObject = [PSCustomObject]@{
+                    LogType = "Error"
+                    Object = "Invoke-PASCPMOperation"
+                    Time = "$($t)"
+                    Detail = "Trouble reconciling $($PrivAcct) account: $($Result_AddPASAccount.userName) || $($Error[0].ScriptStackTrace) || $($Error[0].Exception)"
+                    }
+                    $LogObject | Export-Csv -NoTypeInformation -Force $LoggingFile -Append
+                    
+                    $ReconcileAccount = $false
+                    
+                    $PAPMErrorAccount += $LineUserPriv
+
+                    continue
+            
+                }
+
+            }
+
+            Elseif (!($CreatePrivAccount)) {
+                    
+                    $LogObject = [PSCustomObject]@{
+                    LogType = "Error"
+                    Object = "Invoke-PASCPMOperation"
+                    Time = "$($t)"
+                    Detail = "Failed to create $($PrivAcct) account: $($LineUserPriv)"
+                    }
+                    $LogObject | Export-Csv -NoTypeInformation -Force $LoggingFile -Append
+                
+            }
+
+        #endregion SUBCASE: Reconcile Priv Account
+              
+        }
+
+        #endregion CASE: SafeName Found in PAPM
+            
+    }
+
+    #endregion Process Cases for Existing and Non-Existing SafeNames in PAPM
+          
+}
+
+
+If ($PAPMErrorAccount) { $PAPMErrorAccount | Out-File $PAPMErrorAccountLog -Force}
+
+$LogObject = [PSCustomObject]@{
+LogType = "Informational"
+Object = "Script"
+Time = "$($t)"
+Detail = "End of script"
+}
+$LogObject | Export-Csv -NoTypeInformation -Force $LoggingFile -Append
+
+}
+
+Else {
+
+
+$LogObject = [PSCustomObject]@{
+LogType = "Informational"
+Object = "Import-Csv"
+Time = "$($t)"
+Detail = "No new ADM accounts to onboard. Import Data file was not created."
+}
+$LogObject | Export-Csv -NoTypeInformation -Force $LoggingFile -Append
+
+
+$LogObject = [PSCustomObject]@{
+LogType = "Informational"
+Object = "Script"
+Time = "$($t)"
+Detail = "End of script"
+}
+$LogObject | Export-Csv -NoTypeInformation -Force $LoggingFile -Append
+
+}
+#endregion Process Data
+
+
+#endregion PROCESS
+
