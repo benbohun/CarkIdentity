@@ -1,0 +1,42 @@
+# Path to the CSV file
+$csvFilePath = "C:\Path\To\users.csv"
+
+# Name of the Active Directory group
+$adGroup = "PAPM-Users"
+
+# Import Active Directory Module
+Import-Module ActiveDirectory
+
+# Check if the CSV file exists
+if (-Not (Test-Path $csvFilePath)) {
+    Write-Host "Error: CSV file not found at $csvFilePath" -ForegroundColor Red
+    exit
+}
+
+# Load users from the CSV file
+$users = Import-Csv -Path $csvFilePath
+
+# Check if any users are loaded
+if ($users.Count -eq 0) {
+    Write-Host "No users found in the CSV file." -ForegroundColor Yellow
+    exit
+}
+
+# Process each user
+foreach ($user in $users) {
+    $username = $user.Username
+
+    try {
+        # Check if the user exists in Active Directory
+        $adUser = Get-ADUser -Identity $username -ErrorAction Stop
+
+        # Remove the user from the group
+        Remove-ADGroupMember -Identity $adGroup -Members $adUser -Confirm:$false
+
+        Write-Host "Successfully removed $username from $adGroup" -ForegroundColor Green
+    } catch {
+        Write-Host "Error processing $username: $($_.Exception.Message)" -ForegroundColor Red
+    }
+}
+
+Write-Host "Operation completed." -ForegroundColor Cyan
