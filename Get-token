@@ -1,0 +1,173 @@
+Function Get-IdentityHeader {
+    <#
+    .SYNOPSIS
+        Retrieves an authentication token for CyberArk Identity APIs (Privilege Cloud - ISPSS).
+    .DESCRIPTION
+        This function authenticates a user, handles authentication challenges, and returns an Identity Token.
+        The token is printed to the console for visibility.
+    #>
+    [CmdletBinding(DefaultParameterSetName = 'IdentityUserName')]
+    Param (
+        # Username for authentication
+        [Parameter(ParameterSetName = "IdentityUserName", Mandatory = $true)]
+        [string]$IdentityUserName,
+
+        # Username and Password credentials
+        [Parameter(ParameterSetName = 'UPCreds', Mandatory = $true)]
+        [pscredential]$UPCreds,
+
+        # OAuth credentials (Client ID and Secret)
+        [Parameter(ParameterSetName = 'OAuthCreds', Mandatory = $true)]
+        [pscredential]$OAuthCreds,
+
+        # Identity Tenant URL (found in Identity Admin Portal > Settings > Customization > Tenant URL)
+        [Parameter(Mandatory = $true)]
+        [string]$IdentityTenantURL,
+
+        # Format output token for use with psPAS module
+        [Parameter(Mandatory = $false)]
+        [switch]$psPASFormat,
+
+        # Subdomain assigned to Privilege Cloud
+        [Parameter(Mandatory = $false)]
+        [string]$PCloudSubdomain
+    )
+
+    # Define API URLs
+    $IdaptiveBasePlatformURL = if ($IdentityTenantURL -match "https://") { $IdentityTenantURL } else { "https://$IdentityTenantURL" }
+    $PCloudTenantAPIURL = "https://$PCloudSubdomain.privilegecloud.cyberark.cloud/PasswordVault/"
+
+    # Handle OAuth Authentication
+    if ('OAuthCreds' -eq $PSCmdlet.ParameterSetName) {
+        $IdentityUserName = $OAuthCreds.UserName
+        $identityHeaders = Format-Token(Get-OAuthCreds -OAuthCreds $OAuthCreds)
+
+        # Print Token to Console
+        Write-Host "`n🔐 Identity Token Successfully Retrieved:" -ForegroundColor Cyan
+        Write-Host "--------------------------------------"
+        Write-Host $identityHeaders["Authorization"] -ForegroundColor Green
+        Write-Host "--------------------------------------`n"
+        return $identityHeaders
+    }
+
+    # Start authentication request
+    $startPlatformAPIBody = @{User = $IdentityUserName; Version = "1.0"} | ConvertTo-Json -Compress
+    $startPlatformAPIAuth = "$IdaptiveBasePlatformURL/Security/StartAuthentication"
+
+    # Invoke Authentication
+    try {
+        $IdaptiveResponse = Invoke-RestMethod -Uri $startPlatformAPIAuth -Method Post -ContentType "application/json" -Body $startPlatformAPIBody -TimeoutSec 30
+    } catch {
+        Write-Host "❌ Error: Failed to start authentication - $($_.Exception.Message)" -ForegroundColor Red
+        return
+    }
+
+    # Handle SAML-based authentication
+    IF (![string]::IsNullOrEmpty($IdaptiveResponse.Result.IdpRedirectUrl)) {
+        $AnswerToResponse = Invoke-SAMLLogon $IdaptiveResponse
+    } else {
+        $AnswerToResponse = Invoke-Challenge $IdaptiveResponse
+    }
+
+    # Return Token if authentication is successful
+    If ($AnswerToResponse.success) {
+        $identityHeaders = Format-Token($AnswerToResponse.Result.Token)
+
+        # Print Token for Visibility
+        Write-Host "`n✅ Identity Token Successfully Retrieved:" -ForegroundColor Cyan
+        Write-Host "--------------------------------------"
+        Write-Host $identityHeaders["Authorization"] -ForegroundColor Green
+        Write-Host "--------------------------------------`n"
+
+        return $identityHeaders
+    } else {
+        Write-Host "❌ Error: Unable to retrieve Identity Token" -ForegroundColor Red
+    }
+}
+
+Function Invoke-Challenge {
+    [CmdletBinding()]
+    Param (
+        [Parameter(Mandatory = $true)]
+        [array]$IdaptiveResponse
+    )
+
+    # Handle Multi-Factor Authentication (MFA) Challenges
+    $j = 1
+    ForEach ($challenge in $IdaptiveResponse.Result.Challenges) {
+        $ChallengeCount = $challenge.mechanisms.count
+
+        Write-Host "🔄 Challenge $($j):"
+        If ($ChallengeCount -gt 1) {
+            Write-Host "Multiple authentication options available."
+
+            $i = 1
+            ForEach ($mechanismsOption in $challenge.mechanisms) {
+                Write-Host "$i - $($mechanismsOption.Name) - $($mechanismsOption.PromptMechChosen)"
+                $i++
+            }
+
+            # Request user input for authentication method
+            $Option = Read-Host "Enter the option number (1-$ChallengeCount)"
+            $Mechanism = $challenge.mechanisms[$Option - 1]
+        } Else {
+            $Mechanism = $challenge.mechanisms
+            Write-Host "Using $($Mechanism.Name) authentication method."
+        }
+
+        # Handle authentication response
+        $AnswerToResponse = Invoke-AdvancedAuthBody -SessionId $IdaptiveResponse.Result.SessionId -Mechanism $Mechanism
+    }
+    Return $AnswerToResponse
+}
+
+Function Invoke-AdvancedAuthBody {
+    [CmdletBinding()]
+    Param (
+        [Parameter(Mandatory = $true)]
+        [string]$SessionId,
+        [Parameter(Mandatory = $true)]
+        $Mechanism
+    )
+
+    $MechanismId = $Mechanism.MechanismId
+    If ($Mechanism.AnswerType -eq "StartTextOob") {
+        $Action = "StartOOB"
+    } ElseIf ($Mechanism.AnswerType -eq "Text") {
+        $Action = "Answer"
+        $Answer = Read-Host "Enter your authentication response"
+    }
+
+    $AuthBody = @{SessionId = $SessionId; MechanismId = $MechanismId; Action = $Action; Answer = $Answer} | ConvertTo-Json -Compress
+    return Invoke-RestMethod -Uri "$IdaptiveBasePlatformURL/Security/AdvanceAuthentication" -Method Post -ContentType "application/json" -Body $AuthBody -TimeoutSec 30
+}
+
+Function Get-OAuthCreds {
+    [CmdletBinding()]
+    param (
+        [pscredential]$OAuthCreds
+    )
+    $body = @{
+        "grant_type"    = "client_credentials"
+        "client_id"     = $OAuthCreds.UserName
+        "client_secret" = $OAuthCreds.GetNetworkCredential().Password
+    }
+    return $(Invoke-RestMethod "$IdaptiveBasePlatformURL/oauth2/platformtoken/" -Method 'POST' -Body $body).access_token
+}
+
+Function Format-Token {
+    [CmdletBinding()]
+    param (
+        $AuthToken
+    )
+    $IdentityHeaders = @{
+        "Authorization" = "Bearer $AuthToken"
+        "X-IDAP-NATIVE-CLIENT" = "true"
+    }
+
+    If ($psPASFormat) {
+        $IdentityHeaders["User"] = $IdentityUserName
+        $IdentityHeaders["BaseURI"] = $PCloudTenantAPIURL
+    }
+    Return $IdentityHeaders
+}
