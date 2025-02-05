@@ -1,0 +1,28 @@
+# Import PSPAS module
+Import-Module psPAS
+
+# Define parameters
+$TenantURL = "aat4012.id.cyberark.cloud"
+$PCloudSubdomain = "cna-prod"
+$CSVFilePath = "C:\Temp\DiscoveredAccounts.csv"
+
+# Prompt for user credentials
+$UPCreds = Get-Credential
+
+# Authenticate and establish session
+$header = Get-IdentityHeader -IdentityTenantURL $TenantURL -psPASFormat -PCloudSubdomain $PCloudSubdomain -UPCreds $UPCreds
+Use-PASSession $header
+
+# Verify session
+Get-PASSession
+
+# Clear the discovered accounts list (Optional - Uncomment if needed)
+# Clear-PASDiscoveredAccountList 
+
+# Retrieve discovered accounts
+$DiscoveredAccounts = Get-PASDiscoveredAccount 
+
+# Export discovered accounts to CSV
+$DiscoveredAccounts | Export-Csv -Path $CSVFilePath -NoTypeInformation
+
+Write-Host "Discovered accounts exported successfully to $CSVFilePath"
