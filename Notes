@@ -5,3 +5,4 @@ use-PASSession $header
 Get-PASSession
 The script should look for a csv path with the safe members to be updated and permission to be updated should include Safename,Member,MemberLocation,MemberType,UseAccounts,RetrieveAccounts,ListAccounts,AddAccounts,UpdateAccountContent,UpdateAccountProperties,InitiateCPMAccountManagementOperations,SpecifyNextAccountContent,RenameAccounts,DeleteAccounts,UnlockAccounts,ManageSafe,ManageSafeMembers,BackupSafe,ViewAuditLog,ViewSafeMembers,RequestsAuthorizationLevel,AccessWithoutConfirmation,CreateFolders,DeleteFolders,MoveAccountsAndFolders
 
+https://github.com/cyberark/epv-api-scripts/blob/main/Safe%20Management/Safe-Management.ps1
