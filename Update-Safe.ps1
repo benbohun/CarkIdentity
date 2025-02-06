@@ -46,7 +46,7 @@ function Update-SafeMembers {
 
         foreach ($Member in $SafeMembers) {
             # Convert CSV values to Boolean and Integer where necessary
-            Set-PASSafeMember -SafeName $Member.SafeName -MemberName $Member.Member -SearchIn $Member.MemberLocation -MemberType $Member.MemberType `
+            Set-PASSafeMember -SafeName $Member.SafeName -MemberName $Member.Member -MemberType $Member.MemberType `
                 -UseAccounts (Convert-ToBoolean $Member.UseAccounts) -RetrieveAccounts (Convert-ToBoolean $Member.RetrieveAccounts) -ListAccounts (Convert-ToBoolean $Member.ListAccounts) `
                 -AddAccounts (Convert-ToBoolean $Member.AddAccounts) -UpdateAccountContent (Convert-ToBoolean $Member.UpdateAccountContent) -UpdateAccountProperties (Convert-ToBoolean $Member.UpdateAccountProperties) `
                 -InitiateCPMAccountManagementOperations (Convert-ToBoolean $Member.InitiateCPMAccountManagementOperations) -SpecifyNextAccountContent (Convert-ToBoolean $Member.SpecifyNextAccountContent) `
