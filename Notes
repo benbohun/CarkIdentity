@@ -1,1 +1,7 @@
+Use the Safe-Management.ps1 in attachment, login using script below and use the bulk safe update command. 
+Import-Module psPAS
+$header = Get-IdentityHeader -IdentityTenantURL "aat4012.id.cyberark.cloud" -psPASFormat -PCloudSubdomain "cna-prod" -UPCreds $UPCreds
+use-PASSession $header
+Get-PASSession
+The script should look for a csv path with the safe members to be updated and permission to be updated should include Safename,Member,MemberLocation,MemberType,UseAccounts,RetrieveAccounts,ListAccounts,AddAccounts,UpdateAccountContent,UpdateAccountProperties,InitiateCPMAccountManagementOperations,SpecifyNextAccountContent,RenameAccounts,DeleteAccounts,UnlockAccounts,ManageSafe,ManageSafeMembers,BackupSafe,ViewAuditLog,ViewSafeMembers,RequestsAuthorizationLevel,AccessWithoutConfirmation,CreateFolders,DeleteFolders,MoveAccountsAndFolders
 
