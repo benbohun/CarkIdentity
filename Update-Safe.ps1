@@ -20,12 +20,6 @@ if ($session) {
     Throw "Authentication failed. Exiting script."
 }
 
-# Safe Management Functions from Safe-Management.ps1
-
-#region Safe Management Functions
-
-# Include Safe-Management.ps1 script content directly here
-
 # Function to update Safe Members in bulk
 function Update-SafeMembers {
     param (
@@ -36,7 +30,7 @@ function Update-SafeMembers {
 
         foreach ($Member in $SafeMembers) {
             # Update Safe Member Permissions
-            Set-PASSafeMember -SafeName $Member.SafeName -Member $Member.Member -MemberLocation $Member.MemberLocation -MemberType $Member.MemberType `
+            Set-PASSafeMember -SafeName $Member.SafeName -MemberName $Member.Member -MemberLocation $Member.MemberLocation -MemberType $Member.MemberType `
                 -UseAccounts $Member.UseAccounts -RetrieveAccounts $Member.RetrieveAccounts -ListAccounts $Member.ListAccounts `
                 -AddAccounts $Member.AddAccounts -UpdateAccountContent $Member.UpdateAccountContent -UpdateAccountProperties $Member.UpdateAccountProperties `
                 -InitiateCPMAccountManagementOperations $Member.InitiateCPMAccountManagementOperations -SpecifyNextAccountContent $Member.SpecifyNextAccountContent `
@@ -58,5 +52,5 @@ function Update-SafeMembers {
 Update-SafeMembers -CSVFilePath $CSVFilePath
 
 # End Session
-Remove-PASSession -Session $header
+Close-PASSession
 Write-Host "Session logged off successfully."
