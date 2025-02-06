@@ -20,6 +20,12 @@ if ($session) {
     Throw "Authentication failed. Exiting script."
 }
 
+# Function to convert CSV string values to Boolean
+function Convert-ToBoolean {
+    param ([string]$value)
+    return $value -match "^(True|1)$"
+}
+
 # Function to update Safe Members in bulk
 function Update-SafeMembers {
     param (
@@ -29,16 +35,16 @@ function Update-SafeMembers {
         $SafeMembers = Import-Csv -Path $CSVFilePath
 
         foreach ($Member in $SafeMembers) {
-            # Update Safe Member Permissions
+            # Convert CSV values to Boolean where necessary
             Set-PASSafeMember -SafeName $Member.SafeName -MemberName $Member.Member -MemberLocation $Member.MemberLocation -MemberType $Member.MemberType `
-                -UseAccounts $Member.UseAccounts -RetrieveAccounts $Member.RetrieveAccounts -ListAccounts $Member.ListAccounts `
-                -AddAccounts $Member.AddAccounts -UpdateAccountContent $Member.UpdateAccountContent -UpdateAccountProperties $Member.UpdateAccountProperties `
-                -InitiateCPMAccountManagementOperations $Member.InitiateCPMAccountManagementOperations -SpecifyNextAccountContent $Member.SpecifyNextAccountContent `
-                -RenameAccounts $Member.RenameAccounts -DeleteAccounts $Member.DeleteAccounts -UnlockAccounts $Member.UnlockAccounts `
-                -ManageSafe $Member.ManageSafe -ManageSafeMembers $Member.ManageSafeMembers -BackupSafe $Member.BackupSafe -ViewAuditLog $Member.ViewAuditLog `
-                -ViewSafeMembers $Member.ViewSafeMembers -RequestsAuthorizationLevel $Member.RequestsAuthorizationLevel `
-                -AccessWithoutConfirmation $Member.AccessWithoutConfirmation -CreateFolders $Member.CreateFolders -DeleteFolders $Member.DeleteFolders `
-                -MoveAccountsAndFolders $Member.MoveAccountsAndFolders
+                -UseAccounts (Convert-ToBoolean $Member.UseAccounts) -RetrieveAccounts (Convert-ToBoolean $Member.RetrieveAccounts) -ListAccounts (Convert-ToBoolean $Member.ListAccounts) `
+                -AddAccounts (Convert-ToBoolean $Member.AddAccounts) -UpdateAccountContent (Convert-ToBoolean $Member.UpdateAccountContent) -UpdateAccountProperties (Convert-ToBoolean $Member.UpdateAccountProperties) `
+                -InitiateCPMAccountManagementOperations (Convert-ToBoolean $Member.InitiateCPMAccountManagementOperations) -SpecifyNextAccountContent (Convert-ToBoolean $Member.SpecifyNextAccountContent) `
+                -RenameAccounts (Convert-ToBoolean $Member.RenameAccounts) -DeleteAccounts (Convert-ToBoolean $Member.DeleteAccounts) -UnlockAccounts (Convert-ToBoolean $Member.UnlockAccounts) `
+                -ManageSafe (Convert-ToBoolean $Member.ManageSafe) -ManageSafeMembers (Convert-ToBoolean $Member.ManageSafeMembers) -BackupSafe (Convert-ToBoolean $Member.BackupSafe) -ViewAuditLog (Convert-ToBoolean $Member.ViewAuditLog) `
+                -ViewSafeMembers (Convert-ToBoolean $Member.ViewSafeMembers) -RequestsAuthorizationLevel [int]$Member.RequestsAuthorizationLevel `
+                -AccessWithoutConfirmation (Convert-ToBoolean $Member.AccessWithoutConfirmation) -CreateFolders (Convert-ToBoolean $Member.CreateFolders) -DeleteFolders (Convert-ToBoolean $Member.DeleteFolders) `
+                -MoveAccountsAndFolders (Convert-ToBoolean $Member.MoveAccountsAndFolders)
             
             Write-Host "Updated Safe Member: $($Member.Member) in Safe: $($Member.SafeName)"
         }
