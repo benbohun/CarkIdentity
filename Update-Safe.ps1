@@ -26,6 +26,16 @@ function Convert-ToBoolean {
     return $value -match "^(True|1)$"
 }
 
+# Function to safely convert RequestsAuthorizationLevel to integer
+function Convert-ToInt {
+    param ([string]$value)
+    if ($value -match "^\d+$") {
+        return [int]$value
+    } else {
+        return 0  # Default to 0 if invalid
+    }
+}
+
 # Function to update Safe Members in bulk
 function Update-SafeMembers {
     param (
@@ -35,14 +45,14 @@ function Update-SafeMembers {
         $SafeMembers = Import-Csv -Path $CSVFilePath
 
         foreach ($Member in $SafeMembers) {
-            # Convert CSV values to Boolean where necessary
+            # Convert CSV values to Boolean and Integer where necessary
             Set-PASSafeMember -SafeName $Member.SafeName -MemberName $Member.Member -MemberLocation $Member.MemberLocation -MemberType $Member.MemberType `
                 -UseAccounts (Convert-ToBoolean $Member.UseAccounts) -RetrieveAccounts (Convert-ToBoolean $Member.RetrieveAccounts) -ListAccounts (Convert-ToBoolean $Member.ListAccounts) `
                 -AddAccounts (Convert-ToBoolean $Member.AddAccounts) -UpdateAccountContent (Convert-ToBoolean $Member.UpdateAccountContent) -UpdateAccountProperties (Convert-ToBoolean $Member.UpdateAccountProperties) `
                 -InitiateCPMAccountManagementOperations (Convert-ToBoolean $Member.InitiateCPMAccountManagementOperations) -SpecifyNextAccountContent (Convert-ToBoolean $Member.SpecifyNextAccountContent) `
                 -RenameAccounts (Convert-ToBoolean $Member.RenameAccounts) -DeleteAccounts (Convert-ToBoolean $Member.DeleteAccounts) -UnlockAccounts (Convert-ToBoolean $Member.UnlockAccounts) `
                 -ManageSafe (Convert-ToBoolean $Member.ManageSafe) -ManageSafeMembers (Convert-ToBoolean $Member.ManageSafeMembers) -BackupSafe (Convert-ToBoolean $Member.BackupSafe) -ViewAuditLog (Convert-ToBoolean $Member.ViewAuditLog) `
-                -ViewSafeMembers (Convert-ToBoolean $Member.ViewSafeMembers) -RequestsAuthorizationLevel [int]$Member.RequestsAuthorizationLevel `
+                -ViewSafeMembers (Convert-ToBoolean $Member.ViewSafeMembers) -RequestsAuthorizationLevel (Convert-ToInt $Member.RequestsAuthorizationLevel) `
                 -AccessWithoutConfirmation (Convert-ToBoolean $Member.AccessWithoutConfirmation) -CreateFolders (Convert-ToBoolean $Member.CreateFolders) -DeleteFolders (Convert-ToBoolean $Member.DeleteFolders) `
                 -MoveAccountsAndFolders (Convert-ToBoolean $Member.MoveAccountsAndFolders)
             
