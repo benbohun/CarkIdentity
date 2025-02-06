@@ -29,15 +29,15 @@ if (Test-Path $CSVFilePath) {
 
     foreach ($Member in $SafeMembers) {
         # Update Safe Member Permissions
-        Set-PASSafeMember -SafeName $Member.SafeName -MemberName $Member.Member -MemberType $Member.MemberType `
-            -UseAccounts ([bool]::Parse($Member.UseAccounts)) -RetrieveAccounts ([bool]::Parse($Member.RetrieveAccounts)) -ListAccounts ([bool]::Parse($Member.ListAccounts)) `
-            -AddAccounts ([bool]::Parse($Member.AddAccounts)) -UpdateAccountContent ([bool]::Parse($Member.UpdateAccountContent)) -UpdateAccountProperties ([bool]::Parse($Member.UpdateAccountProperties)) `
-            -InitiateCPMAccountManagementOperations ([bool]::Parse($Member.InitiateCPMAccountManagementOperations)) -SpecifyNextAccountContent ([bool]::Parse($Member.SpecifyNextAccountContent)) `
-            -RenameAccounts ([bool]::Parse($Member.RenameAccounts)) -DeleteAccounts ([bool]::Parse($Member.DeleteAccounts)) -UnlockAccounts ([bool]::Parse($Member.UnlockAccounts)) `
-            -ManageSafe ([bool]::Parse($Member.ManageSafe)) -ManageSafeMembers ([bool]::Parse($Member.ManageSafeMembers)) -BackupSafe ([bool]::Parse($Member.BackupSafe)) -ViewAuditLog ([bool]::Parse($Member.ViewAuditLog)) `
-            -ViewSafeMembers ([bool]::Parse($Member.ViewSafeMembers)) -RequestsAuthorizationLevel ([int]::Parse($Member.RequestsAuthorizationLevel)) `
-            -AccessWithoutConfirmation ([bool]::Parse($Member.AccessWithoutConfirmation)) -CreateFolders ([bool]::Parse($Member.CreateFolders)) -DeleteFolders ([bool]::Parse($Member.DeleteFolders)) `
-            -MoveAccountsAndFolders ([bool]::Parse($Member.MoveAccountsAndFolders))
+        Set-PASSafeMember -SafeName $Member.SafeName -MemberName $Member.Member -SearchIn $Member.MemberLocation -MemberType $Member.MemberType `
+            -UseAccounts ([bool]$Member.UseAccounts) -RetrieveAccounts ([bool]$Member.RetrieveAccounts) -ListAccounts ([bool]$Member.ListAccounts) `
+            -AddAccounts ([bool]$Member.AddAccounts) -UpdateAccountContent ([bool]$Member.UpdateAccountContent) -UpdateAccountProperties ([bool]$Member.UpdateAccountProperties) `
+            -InitiateCPMAccountManagementOperations ([bool]$Member.InitiateCPMAccountManagementOperations) -SpecifyNextAccountContent ([bool]$Member.SpecifyNextAccountContent) `
+            -RenameAccounts ([bool]$Member.RenameAccounts) -DeleteAccounts ([bool]$Member.DeleteAccounts) -UnlockAccounts ([bool]$Member.UnlockAccounts) `
+            -ManageSafe ([bool]$Member.ManageSafe) -ManageSafeMembers ([bool]$Member.ManageSafeMembers) -BackupSafe ([bool]$Member.BackupSafe) -ViewAuditLog ([bool]$Member.ViewAuditLog) `
+            -ViewSafeMembers ([bool]$Member.ViewSafeMembers) -RequestsAuthorizationLevel ([int]$Member.RequestsAuthorizationLevel) `
+            -AccessWithoutConfirmation ([bool]$Member.AccessWithoutConfirmation) -CreateFolders ([bool]$Member.CreateFolders) -DeleteFolders ([bool]$Member.DeleteFolders) `
+            -MoveAccountsAndFolders ([bool]$Member.MoveAccountsAndFolders)
         
         Write-Host "Updated Safe Member: $($Member.Member) in Safe: $($Member.SafeName)"
     }
