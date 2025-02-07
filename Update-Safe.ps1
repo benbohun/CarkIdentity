@@ -9,24 +9,15 @@ $TenantURL = "aat4012.id.cyberark.cloud"
 $PCloudSubdomain = "cna-prod"
 $CSVFilePath = "C:\Temp\SafeMembersUpdate.csv"  # Path to CSV file with safe members
 
-# Check for an existing session
+# Check if session is already active
 $session = Get-PASSession -ErrorAction SilentlyContinue
-$NewSessionCreated = $false
-
 if (-not $session) {
-    Write-Host "No existing session detected. Initiating authentication..."
-    
     # Prompt for user credentials
     $UPCreds = Get-Credential
 
     # Authenticate and establish a session
-    try {
-        $header = Get-IdentityHeader -IdentityTenantURL $TenantURL -psPASFormat -PCloudSubdomain $PCloudSubdomain -UPCreds $UPCreds
-        Use-PASSession $header
-        $NewSessionCreated = $true  # Track if a new session was created
-    } catch {
-        Throw "Authentication failed: $_"
-    }
+    $header = Get-IdentityHeader -IdentityTenantURL $TenantURL -psPASFormat -PCloudSubdomain $PCloudSubdomain -UPCreds $UPCreds
+    Use-PASSession $header
 
     # Verify session
     $session = Get-PASSession
@@ -49,17 +40,17 @@ if (Test-Path $CSVFilePath) {
         # Log action
         Write-Host "Processing member $($Member.Member) for safe $($Member.SafeName)."
 
-        # Update Safe Member Permissions using Set-SafeMember
+        # Update Safe Member Permissions using Set-PASSafeMember
         try {
-            Set-SafeMember -SafeName $Member.SafeName -safeMember $Member.Member -updateMember:$true -deleteMember:$false -memberSearchInLocation $Member.MemberLocation -MemberType $Member.MemberType `
-                -permUseAccounts ([bool]$Member.UseAccounts) -permRetrieveAccounts ([bool]$Member.RetrieveAccounts) -permListAccounts ([bool]$Member.ListAccounts) `
-                -permAddAccounts ([bool]$Member.AddAccounts) -permUpdateAccountContent ([bool]$Member.UpdateAccountContent) -permUpdateAccountProperties ([bool]$Member.UpdateAccountProperties) `
-                -permInitiateCPMManagement ([bool]$Member.InitiateCPMAccountManagementOperations) -permSpecifyNextAccountContent ([bool]$Member.SpecifyNextAccountContent) `
-                -permRenameAccounts ([bool]$Member.RenameAccounts) -permDeleteAccounts ([bool]$Member.DeleteAccounts) -permUnlockAccounts ([bool]$Member.UnlockAccounts) `
-                -permManageSafe ([bool]$Member.ManageSafe) -permManageSafeMembers ([bool]$Member.ManageSafeMembers) -permBackupSafe ([bool]$Member.BackupSafe) -permViewAuditLog ([bool]$Member.ViewAuditLog) `
-                -permViewSafeMembers ([bool]$Member.ViewSafeMembers) -permRequestsAuthorizationLevel ([int]$Member.RequestsAuthorizationLevel) `
-                -permAccessWithoutConfirmation ([bool]$Member.AccessWithoutConfirmation) -permCreateFolders ([bool]$Member.CreateFolders) -permDeleteFolders ([bool]$Member.DeleteFolders) `
-                -permMoveAccountsAndFolders ([bool]$Member.MoveAccountsAndFolders)
+            Set-PASSafeMember -SafeName $Member.SafeName -MemberName $Member.Member -SearchIn $Member.MemberLocation -MemberType $Member.MemberType `
+                -UseAccounts ([bool]$Member.UseAccounts) -RetrieveAccounts ([bool]$Member.RetrieveAccounts) -ListAccounts ([bool]$Member.ListAccounts) `
+                -AddAccounts ([bool]$Member.AddAccounts) -UpdateAccountContent ([bool]$Member.UpdateAccountContent) -UpdateAccountProperties ([bool]$Member.UpdateAccountProperties) `
+                -InitiateCPMAccountManagementOperations ([bool]$Member.InitiateCPMAccountManagementOperations) -SpecifyNextAccountContent ([bool]$Member.SpecifyNextAccountContent) `
+                -RenameAccounts ([bool]$Member.RenameAccounts) -DeleteAccounts ([bool]$Member.DeleteAccounts) -UnlockAccounts ([bool]$Member.UnlockAccounts) `
+                -ManageSafe ([bool]$Member.ManageSafe) -ManageSafeMembers ([bool]$Member.ManageSafeMembers) -BackupSafe ([bool]$Member.BackupSafe) -ViewAuditLog ([bool]$Member.ViewAuditLog) `
+                -ViewSafeMembers ([bool]$Member.ViewSafeMembers) -RequestsAuthorizationLevel ([int]$Member.RequestsAuthorizationLevel) `
+                -AccessWithoutConfirmation ([bool]$Member.AccessWithoutConfirmation) -CreateFolders ([bool]$Member.CreateFolders) -DeleteFolders ([bool]$Member.DeleteFolders) `
+                -MoveAccountsAndFolders ([bool]$Member.MoveAccountsAndFolders)
         } catch {
             Write-Host "Error updating Safe Member: $($Member.Member) in Safe: $($Member.SafeName) - $_"
         }
@@ -69,14 +60,10 @@ if (Test-Path $CSVFilePath) {
     Write-Host "CSV file not found: $CSVFilePath"
 }
 
-# End Session Only If a New Session Was Created
-if ($NewSessionCreated) {
-    try {
-        Remove-PASSession -Session $header
-        Write-Host "Session logged off successfully."
-    } catch {
-        Write-Host "Error logging off session: $_"
-    }
-} else {
-    Write-Host "Reused existing session, no need to log off."
+# End Session
+try {
+    Remove-PASSession -Session $header
+    Write-Host "Session logged off successfully."
+} catch {
+    Write-Host "Error logging off session: $_"
 }
