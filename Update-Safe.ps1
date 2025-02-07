@@ -16,15 +16,18 @@ if (-not $session) {
     $UPCreds = Get-Credential
 
     # Authenticate and establish a session
-    $header = Get-IdentityHeader -IdentityTenantURL $TenantURL -psPASFormat -PCloudSubdomain $PCloudSubdomain -UPCreds $UPCreds
-    Use-PASSession $header
-
-    # Verify session
-    $session = Get-PASSession
-    if (-not $session) {
-        Throw "Authentication failed. Exiting script."
+    try {
+        $header = Get-IdentityHeader -IdentityTenantURL $TenantURL -psPASFormat -PCloudSubdomain $PCloudSubdomain -UPCreds $UPCreds
+        Use-PASSession $header
+        $session = Get-PASSession
+        if (-not $session) {
+            Throw "Authentication failed. Exiting script."
+        }
+        Write-Host "Authentication successful, session established."
+    } catch {
+        Write-Host "Error during authentication: $_"
+        exit 1
     }
-    Write-Host "Authentication successful, session established."
 } else {
     Write-Host "Existing session detected, reusing session."
 }
@@ -42,15 +45,30 @@ if (Test-Path $CSVFilePath) {
 
         # Update Safe Member Permissions using Set-PASSafeMember
         try {
-            Set-PASSafeMember -SafeName $Member.SafeName -MemberName $Member.Member -SearchIn $Member.MemberLocation -MemberType $Member.MemberType `
-                -UseAccounts ([bool]$Member.UseAccounts) -RetrieveAccounts ([bool]$Member.RetrieveAccounts) -ListAccounts ([bool]$Member.ListAccounts) `
-                -AddAccounts ([bool]$Member.AddAccounts) -UpdateAccountContent ([bool]$Member.UpdateAccountContent) -UpdateAccountProperties ([bool]$Member.UpdateAccountProperties) `
-                -InitiateCPMAccountManagementOperations ([bool]$Member.InitiateCPMAccountManagementOperations) -SpecifyNextAccountContent ([bool]$Member.SpecifyNextAccountContent) `
-                -RenameAccounts ([bool]$Member.RenameAccounts) -DeleteAccounts ([bool]$Member.DeleteAccounts) -UnlockAccounts ([bool]$Member.UnlockAccounts) `
-                -ManageSafe ([bool]$Member.ManageSafe) -ManageSafeMembers ([bool]$Member.ManageSafeMembers) -BackupSafe ([bool]$Member.BackupSafe) -ViewAuditLog ([bool]$Member.ViewAuditLog) `
-                -ViewSafeMembers ([bool]$Member.ViewSafeMembers) -RequestsAuthorizationLevel ([int]$Member.RequestsAuthorizationLevel) `
-                -AccessWithoutConfirmation ([bool]$Member.AccessWithoutConfirmation) -CreateFolders ([bool]$Member.CreateFolders) -DeleteFolders ([bool]$Member.DeleteFolders) `
-                -MoveAccountsAndFolders ([bool]$Member.MoveAccountsAndFolders)
+            Set-PASSafeMember -SafeName $Member.SafeName -MemberName $Member.Member -MemberType $Member.MemberType `
+                -UseAccounts ([System.Convert]::ToBoolean($Member.UseAccounts)) `
+                -RetrieveAccounts ([System.Convert]::ToBoolean($Member.RetrieveAccounts)) `
+                -ListAccounts ([System.Convert]::ToBoolean($Member.ListAccounts)) `
+                -AddAccounts ([System.Convert]::ToBoolean($Member.AddAccounts)) `
+                -UpdateAccountContent ([System.Convert]::ToBoolean($Member.UpdateAccountContent)) `
+                -UpdateAccountProperties ([System.Convert]::ToBoolean($Member.UpdateAccountProperties)) `
+                -InitiateCPMAccountManagementOperations ([System.Convert]::ToBoolean($Member.InitiateCPMAccountManagementOperations)) `
+                -SpecifyNextAccountContent ([System.Convert]::ToBoolean($Member.SpecifyNextAccountContent)) `
+                -RenameAccounts ([System.Convert]::ToBoolean($Member.RenameAccounts)) `
+                -DeleteAccounts ([System.Convert]::ToBoolean($Member.DeleteAccounts)) `
+                -UnlockAccounts ([System.Convert]::ToBoolean($Member.UnlockAccounts)) `
+                -ManageSafe ([System.Convert]::ToBoolean($Member.ManageSafe)) `
+                -ManageSafeMembers ([System.Convert]::ToBoolean($Member.ManageSafeMembers)) `
+                -BackupSafe ([System.Convert]::ToBoolean($Member.BackupSafe)) `
+                -ViewAuditLog ([System.Convert]::ToBoolean($Member.ViewAuditLog)) `
+                -ViewSafeMembers ([System.Convert]::ToBoolean($Member.ViewSafeMembers)) `
+                -RequestsAuthorizationLevel ([int]$Member.RequestsAuthorizationLevel) `
+                -AccessWithoutConfirmation ([System.Convert]::ToBoolean($Member.AccessWithoutConfirmation)) `
+                -CreateFolders ([System.Convert]::ToBoolean($Member.CreateFolders)) `
+                -DeleteFolders ([System.Convert]::ToBoolean($Member.DeleteFolders)) `
+                -MoveAccountsAndFolders ([System.Convert]::ToBoolean($Member.MoveAccountsAndFolders))
+
+            Write-Host "Successfully updated Safe Member: $($Member.Member) in Safe: $($Member.SafeName)"
         } catch {
             Write-Host "Error updating Safe Member: $($Member.Member) in Safe: $($Member.SafeName) - $_"
         }
@@ -62,8 +80,11 @@ if (Test-Path $CSVFilePath) {
 
 # End Session
 try {
-    Remove-PASSession -Session $header
-    Write-Host "Session logged off successfully."
+    if ($session) {
+        Write-Host "Logging off session..."
+        Disconnect-PASSession
+        Write-Host "Session logged off successfully."
+    }
 } catch {
     Write-Host "Error logging off session: $_"
 }
