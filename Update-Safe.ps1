@@ -9,15 +9,24 @@ $TenantURL = "aat4012.id.cyberark.cloud"
 $PCloudSubdomain = "cna-prod"
 $CSVFilePath = "C:\Temp\SafeMembersUpdate.csv"  # Path to CSV file with safe members
 
-# Check if session is already active
+# Check for an existing session
 $session = Get-PASSession -ErrorAction SilentlyContinue
+$NewSessionCreated = $false
+
 if (-not $session) {
+    Write-Host "No existing session detected. Initiating authentication..."
+    
     # Prompt for user credentials
     $UPCreds = Get-Credential
 
     # Authenticate and establish a session
-    $header = Get-IdentityHeader -IdentityTenantURL $TenantURL -psPASFormat -PCloudSubdomain $PCloudSubdomain -UPCreds $UPCreds
-    Use-PASSession $header
+    try {
+        $header = Get-IdentityHeader -IdentityTenantURL $TenantURL -psPASFormat -PCloudSubdomain $PCloudSubdomain -UPCreds $UPCreds
+        Use-PASSession $header
+        $NewSessionCreated = $true  # Track if a new session was created
+    } catch {
+        Throw "Authentication failed: $_"
+    }
 
     # Verify session
     $session = Get-PASSession
@@ -60,10 +69,14 @@ if (Test-Path $CSVFilePath) {
     Write-Host "CSV file not found: $CSVFilePath"
 }
 
-# End Session
-try {
-    Remove-PASSession -Session $header
-    Write-Host "Session logged off successfully."
-} catch {
-    Write-Host "Error logging off session: $_"
+# End Session Only If a New Session Was Created
+if ($NewSessionCreated) {
+    try {
+        Remove-PASSession -Session $header
+        Write-Host "Session logged off successfully."
+    } catch {
+        Write-Host "Error logging off session: $_"
+    }
+} else {
+    Write-Host "Reused existing session, no need to log off."
 }
