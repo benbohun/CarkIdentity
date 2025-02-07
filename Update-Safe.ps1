@@ -1,3 +1,7 @@
+if (-not (Get-Module -Name psPAS -ListAvailable)) {
+    Write-Host "psPAS module not found. Installing..."
+    Install-Module -Name psPAS -Force -Scope CurrentUser
+}
 Import-Module psPAS
 
 # Define parameters
@@ -17,6 +21,13 @@ $session = Get-PASSession
 if ($session) {
     Write-Host "Authentication successful, session established."
 } else {
+    Start-Sleep -Seconds 5
+    $session = Get-PASSession
+    if (-not $session) {
+        Throw "Authentication failed after retry. Exiting script."
+    }
+    Write-Host "Authentication successful, session established."
+} else {
     Throw "Authentication failed. Exiting script."
 }
 
@@ -26,9 +37,27 @@ if ($session) {
 # Read Safe Members Update CSV
 if (Test-Path $CSVFilePath) {
     $SafeMembers = Import-Csv -Path $CSVFilePath
+    if (-not ($SafeMembers | Get-Member -Name "SafeName")) {
+        Throw "CSV file format is incorrect. Expected column: SafeName"
+    }
+    $SafeMembers = Import-Csv -Path $CSVFilePath
 
     foreach ($Member in $SafeMembers) {
-        # Update Safe Member Permissions
+        # Log action
+        Write-LogMessage -type Verbose -MSG "Processing member $($Member.Member) for safe $($Member.SafeName)."
+        
+        # Update Safe Member Permissions using Set-SafeMember
+        Set-SafeMember -SafeName $Member.SafeName -safeMember $Member.Member -updateMember:$true -deleteMember:$false -memberSearchInLocation $Member.MemberLocation -MemberType $Member.MemberType `
+            -permUseAccounts ([bool]$Member.UseAccounts) -permRetrieveAccounts ([bool]$Member.RetrieveAccounts) -permListAccounts ([bool]$Member.ListAccounts) `
+            -permAddAccounts ([bool]$Member.AddAccounts) -permUpdateAccountContent ([bool]$Member.UpdateAccountContent) -permUpdateAccountProperties ([bool]$Member.UpdateAccountProperties) `
+            -permInitiateCPMManagement ([bool]$Member.InitiateCPMAccountManagementOperations) -permSpecifyNextAccountContent ([bool]$Member.SpecifyNextAccountContent) `
+            -permRenameAccounts ([bool]$Member.RenameAccounts) -permDeleteAccounts ([bool]$Member.DeleteAccounts) -permUnlockAccounts ([bool]$Member.UnlockAccounts) `
+            -permManageSafe ([bool]$Member.ManageSafe) -permManageSafeMembers ([bool]$Member.ManageSafeMembers) -permBackupSafe ([bool]$Member.BackupSafe) -permViewAuditLog ([bool]$Member.ViewAuditLog) `
+            -permViewSafeMembers ([bool]$Member.ViewSafeMembers) -permRequestsAuthorizationLevel ([int]$Member.RequestsAuthorizationLevel) `
+            -permAccessWithoutConfirmation ([bool]$Member.AccessWithoutConfirmation) -permCreateFolders ([bool]$Member.CreateFolders) -permDeleteFolders ([bool]$Member.DeleteFolders) `
+            -permMoveAccountsAndFolders ([bool]$Member.MoveAccountsAndFolders)
+        
+        # Update Safe Member Permissions using Set-PASSafeMember (CyberArk Privilege Cloud)
         Set-PASSafeMember -SafeName $Member.SafeName -MemberName $Member.Member -SearchIn $Member.MemberLocation -MemberType $Member.MemberType `
             -UseAccounts ([bool]$Member.UseAccounts) -RetrieveAccounts ([bool]$Member.RetrieveAccounts) -ListAccounts ([bool]$Member.ListAccounts) `
             -AddAccounts ([bool]$Member.AddAccounts) -UpdateAccountContent ([bool]$Member.UpdateAccountContent) -UpdateAccountProperties ([bool]$Member.UpdateAccountProperties) `
@@ -47,5 +76,10 @@ if (Test-Path $CSVFilePath) {
 }
 
 # End Session
-Remove-PASSession -Session $header
+try {
+    Remove-PASSession -Session $header
+    Write-Host "Session logged off successfully."
+} catch {
+    Write-Host "Error logging off session: $_"
+}
 Write-Host "Session logged off successfully."
