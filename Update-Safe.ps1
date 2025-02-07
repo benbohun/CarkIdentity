@@ -29,13 +29,6 @@ if (-not $session) {
     Write-Host "Existing session detected, reusing session."
 }
 
-# Import Safe-Management.ps1 script
-if (Test-Path "C:\Path\To\Safe-Management.ps1") {
-    . "C:\Path\To\Safe-Management.ps1"
-} else {
-    Throw "Safe-Management.ps1 script not found. Exiting script."
-}
-
 # Read Safe Members Update CSV
 if (Test-Path $CSVFilePath) {
     $SafeMembers = Import-Csv -Path $CSVFilePath
