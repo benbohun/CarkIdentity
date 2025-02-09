@@ -20,16 +20,18 @@ $UPCreds = Get-Credential
 Write-Log "Starting CyberArk Authentication..."
 $session = Get-IdentityHeader -IdentityTenantURL $TenantURL -psPASFormat -PCloudSubdomain $PCloudSubdomain -UPCreds $UPCreds
 Use-PASSession $session
-Write-Log "Authentication successful."
 
-# Check if session has an authorization token
-if (-not $session.Authorization) {
-    Write-Log "ERROR: Authorization token not received. Check authentication details."
+# Verify session
+$sessionCheck = Get-PASSession
+if ($sessionCheck) {
+    Write-Log "Authentication successful, session established."
+} else {
+    Write-Log "ERROR: Authentication failed. Exiting script."
     exit
 }
 
 # Extract Token for API Calls
-$AuthToken = $session.Authorization -replace 'Bearer ', '' # Ensure token is clean
+$AuthToken = $session.Authorization -replace 'Bearer ', ''
 $headers = @{
     "Authorization" = "Bearer $AuthToken"
     "Content-Type"  = "application/json"
