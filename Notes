@@ -1,4 +1,3 @@
 SafeName,Member,MemberLocation,MemberType,UseAccounts,RetrieveAccounts,ListAccounts,AddAccounts,UpdateAccountContent,UpdateAccountProperties,InitiateCPMAccountManagementOperations,SpecifyNextAccountContent,RenameAccounts,DeleteAccounts,UnlockAccounts,ManageSafe,ManageSafeMembers,BackupSafe,ViewAuditLog,ViewSafeMembers,RequestsAuthorizationLevel,AccessWithoutConfirmation,CreateFolders,DeleteFolders,MoveAccountsAndFolders
 FinanceSafe,User1,\\Users,User,TRUE,TRUE,TRUE,FALSE,FALSE,FALSE,FALSE,FALSE,FALSE,FALSE,FALSE,TRUE,FALSE,TRUE,TRUE,1,FALSE,FALSE,FALSE,FALSE
 HRSafe,User2,\\Groups,Group,TRUE,FALSE,TRUE,TRUE,TRUE,FALSE,FALSE,FALSE,FALSE,FALSE,FALSE,FALSE,TRUE,TRUE,TRUE,0,TRUE,FALSE,FALSE,FALSE
-ITSafe,User3,\\Users,User,TRUE,TRUE,TRUE,TRUE,FALSE,TRUE,TRUE,FALSE,FALSE,TRUE,FALSE,FALSE,TRUE,TRUE,FALSE,1,TRUE,TRUE,FALSE,TRUE
