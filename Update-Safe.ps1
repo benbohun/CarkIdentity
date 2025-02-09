@@ -12,24 +12,31 @@ Function Write-Log {
 }
 
 # Authentication Variables
-$PCloudSubdomain = "your-subdomain"  # Change this to your actual subdomain
-$TenantURL = "https://$PCloudSubdomain.privilegecloud.cyberark.cloud/PasswordVault"
-$UPCreds = Get-Credential
+$PCloudSubdomain = "your-subdomain"  # Change this to your actual CyberArk ISPSS subdomain
+$TenantID = "your-tenant-id"  # Replace with CyberArk Identity tenant ID
+$ClientID = "api@cyberark.cloud"  # Replace with CyberArk API Client ID
+$ClientSecret = "your-API-password"  # Replace with CyberArk API Client Secret
+$TokenURL = "https://$TenantID.id.cyberark.cloud/oauth2/platformtoken"  # CyberArk ISPSS Token URL
 
-# Authenticate and start session
-Write-Log "Starting CyberArk Authentication..."
-$session = New-PASSession -Credential $UPCreds -BaseURI $TenantURL
-if ($session) {
-    Write-Log "Authentication successful, session established."
-} else {
-    Write-Log "ERROR: Authentication failed. Exiting script."
+# Request Initial Token (Step 1)
+Write-Log "Requesting initial CyberArk ISPSS token..."
+$Body = "grant_type=client_credentials&client_id=$ClientID&client_secret=$ClientSecret"
+$headers = @{
+    "Content-Type" = "application/x-www-form-urlencoded"
+}
+
+try {
+    $TokenResponse = Invoke-RestMethod -Uri $TokenURL -Method Post -Headers $headers -Body $Body
+    $BearerToken = $TokenResponse.access_token
+    Write-Log "Authentication successful, token obtained."
+} catch {
+    Write-Log "ERROR: Failed to authenticate with CyberArk ISPSS. $_"
     exit
 }
 
-# Extract Token for API Calls
-$AuthToken = $session.Token
+# Define Headers for API Requests (Step 2)
 $headers = @{
-    "Authorization" = "Bearer $AuthToken"
+    "Authorization" = "Bearer $BearerToken"
     "Content-Type"  = "application/json"
 }
 
@@ -55,7 +62,7 @@ foreach ($Member in $SafeMembers) {
     $SafeUrlId = [System.Web.HttpUtility]::UrlEncode($SafeName)
 
     # Construct API URL
-    $APIEndpoint = "$TenantURL/API/Safes/$SafeUrlId/Members/$MemberName"
+    $APIEndpoint = "https://$PCloudSubdomain.privilegecloud.cyberark.cloud/PasswordVault/API/Safes/$SafeUrlId/Members/$MemberName"
 
     # Construct JSON Payload (matching API requirements)
     $jsonBody = @{
@@ -89,7 +96,7 @@ foreach ($Member in $SafeMembers) {
     Write-Log "Updating Safe Member: $MemberName in Safe: $SafeName"
 
     try {
-        # Execute API Request using PUT method
+        # Execute API Request using PUT method (Step 3)
         $response = Invoke-RestMethod -Uri $APIEndpoint -Method Put -Headers $headers -Body $jsonBody -ErrorAction Stop
         Write-Log "Successfully updated permissions for $MemberName in $SafeName"
     }
