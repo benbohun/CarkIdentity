@@ -12,8 +12,8 @@ Function Write-Log {
 }
 
 # Authentication Variables
-$TenantURL = "https://yourtenant.identity.cyberark.cloud"
-$PCloudSubdomain = "your_subdomain"
+$PCloudSubdomain = "your-subdomain"  # Change this to your actual subdomain
+$TenantURL = "https://$PCloudSubdomain.privilegecloud.cyberark.com"
 $UPCreds = Get-Credential
 
 # Authenticate and start session
@@ -31,11 +31,11 @@ if (-Not (Test-Path $CsvFilePath)) {
     exit
 }
 
+# CyberArk ISPSS Cloud API Base URL
+$CyberArkAPIBase = "https://$PCloudSubdomain.privilegecloud.cyberark.com/PasswordVault/WebServices/PIMServices.svc"
+
 # Load CSV
 $SafeMembers = Import-Csv -Path $CsvFilePath
-
-# CyberArk API Base URL
-$CyberArkAPIBase = "https://your-cyberark-instance/PasswordVault/WebServices/PIMServices.svc"
 
 # Process each Safe member
 foreach ($Member in $SafeMembers) {
