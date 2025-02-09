@@ -16,7 +16,7 @@ $PCloudSubdomain = "your-subdomain"  # Change this to your actual CyberArk ISPSS
 $TenantID = "your-tenant-id"  # Replace with CyberArk Identity tenant ID
 $ClientID = "api@cyberark.cloud"  # Replace with CyberArk API Client ID
 $ClientSecret = "your-API-password"  # Replace with CyberArk API Client Secret
-$TokenURL = "https://$TenantID.id.cyberark.cloud/oauth2/platformtoken"  # CyberArk ISPSS Token URL
+$TokenURL = "https://$TenantID.id.cyberark.cloud/oauth2/platformtoken"
 
 # Request Initial Token (Step 1)
 Write-Log "Requesting initial CyberArk ISPSS token..."
@@ -27,7 +27,7 @@ $headers = @{
 
 try {
     $TokenResponse = Invoke-RestMethod -Uri $TokenURL -Method Post -Headers $headers -Body $Body
-    $BearerToken = $TokenResponse.access_token
+    $BearerToken = [string]$TokenResponse.access_token  # Ensure token is a string
     Write-Log "Authentication successful, token obtained."
 } catch {
     Write-Log "ERROR: Failed to authenticate with CyberArk ISPSS. $_"
@@ -88,20 +88,6 @@ foreach ($Member in $SafeMembers) {
             "addAccounts" = [boolean]($Member.AddAccounts -eq "TRUE")
             "updateAccountContent" = [boolean]($Member.UpdateAccountContent -eq "TRUE")
             "updateAccountProperties" = [boolean]($Member.UpdateAccountProperties -eq "TRUE")
-            "initiateCPMAccountManagementOperations" = [boolean]($Member.InitiateCPMAccountManagementOperations -eq "TRUE")
-            "specifyNextAccountContent" = [boolean]($Member.SpecifyNextAccountContent -eq "TRUE")
-            "renameAccounts" = [boolean]($Member.RenameAccounts -eq "TRUE")
-            "deleteAccounts" = [boolean]($Member.DeleteAccounts -eq "TRUE")
-            "unlockAccounts" = [boolean]($Member.UnlockAccounts -eq "TRUE")
-            "manageSafe" = [boolean]($Member.ManageSafe -eq "TRUE")
-            "manageSafeMembers" = [boolean]($Member.ManageSafeMembers -eq "TRUE")
-            "backupSafe" = [boolean]($Member.BackupSafe -eq "TRUE")
-            "viewAuditLog" = [boolean]($Member.ViewAuditLog -eq "TRUE")
-            "viewSafeMembers" = [boolean]($Member.ViewSafeMembers -eq "TRUE")
-            "accessWithoutConfirmation" = [boolean]($Member.AccessWithoutConfirmation -eq "TRUE")
-            "createFolders" = [boolean]($Member.CreateFolders -eq "TRUE")
-            "deleteFolders" = [boolean]($Member.DeleteFolders -eq "TRUE")
-            "moveAccountsAndFolders" = [boolean]($Member.MoveAccountsAndFolders -eq "TRUE")
             "requestsAuthorizationLevel1" = [boolean]($Member.RequestsAuthorizationLevel1 -eq "TRUE")
             "requestsAuthorizationLevel2" = [boolean]($Member.RequestsAuthorizationLevel2 -eq "TRUE")
         }
