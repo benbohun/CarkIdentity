@@ -11,7 +11,7 @@ Function Write-Log {
     Write-Output $LogEntry
 }
 
-# Authentication Variables (User should define these)
+# Authentication Variables
 $TenantURL = "https://yourtenant.identity.cyberark.cloud"
 $PCloudSubdomain = "your_subdomain"
 $UPCreds = Get-Credential
@@ -34,42 +34,54 @@ if (-Not (Test-Path $CsvFilePath)) {
 # Load CSV
 $SafeMembers = Import-Csv -Path $CsvFilePath
 
+# CyberArk API Base URL
+$CyberArkAPIBase = "https://your-cyberark-instance/PasswordVault/WebServices/PIMServices.svc"
+
 # Process each Safe member
 foreach ($Member in $SafeMembers) {
     $SafeName = $Member.SafeName
     $MemberName = $Member.Member
     $MemberLocation = $Member.MemberLocation
     $MemberType = $Member.MemberType
-    
-    # Convert permission values to Boolean (CyberArk requires this)
-    $Permissions = @{
-        "UseAccounts" = [boolean]($Member.UseAccounts -eq "TRUE")
-        "RetrieveAccounts" = [boolean]($Member.RetrieveAccounts -eq "TRUE")
-        "ListAccounts" = [boolean]($Member.ListAccounts -eq "TRUE")
-        "AddAccounts" = [boolean]($Member.AddAccounts -eq "TRUE")
-        "UpdateAccountContent" = [boolean]($Member.UpdateAccountContent -eq "TRUE")
-        "UpdateAccountProperties" = [boolean]($Member.UpdateAccountProperties -eq "TRUE")
-        "InitiateCPMAccountManagementOperations" = [boolean]($Member.InitiateCPMAccountManagementOperations -eq "TRUE")
-        "SpecifyNextAccountContent" = [boolean]($Member.SpecifyNextAccountContent -eq "TRUE")
-        "RenameAccounts" = [boolean]($Member.RenameAccounts -eq "TRUE")
-        "DeleteAccounts" = [boolean]($Member.DeleteAccounts -eq "TRUE")
-        "UnlockAccounts" = [boolean]($Member.UnlockAccounts -eq "TRUE")
-        "ManageSafe" = [boolean]($Member.ManageSafe -eq "TRUE")
-        "ManageSafeMembers" = [boolean]($Member.ManageSafeMembers -eq "TRUE")
-        "BackupSafe" = [boolean]($Member.BackupSafe -eq "TRUE")
-        "ViewAuditLog" = [boolean]($Member.ViewAuditLog -eq "TRUE")
-        "ViewSafeMembers" = [boolean]($Member.ViewSafeMembers -eq "TRUE")
-        "RequestsAuthorizationLevel" = [int]$Member.RequestsAuthorizationLevel  # Handling as 1 or 0
-        "AccessWithoutConfirmation" = [boolean]($Member.AccessWithoutConfirmation -eq "TRUE")
-        "CreateFolders" = [boolean]($Member.CreateFolders -eq "TRUE")
-        "DeleteFolders" = [boolean]($Member.DeleteFolders -eq "TRUE")
-        "MoveAccountsAndFolders" = [boolean]($Member.MoveAccountsAndFolders -eq "TRUE")
-    }
+
+    # Construct API URL
+    $APIEndpoint = "$CyberArkAPIBase/Safes/$SafeName/Members/$MemberName"
+
+    # Construct JSON Payload
+    $jsonBody = @{
+        "member" = @{
+            "MemberName" = $MemberName
+            "Permissions" = @{
+                "UseAccounts" = [boolean]($Member.UseAccounts -eq "TRUE")
+                "RetrieveAccounts" = [boolean]($Member.RetrieveAccounts -eq "TRUE")
+                "ListAccounts" = [boolean]($Member.ListAccounts -eq "TRUE")
+                "AddAccounts" = [boolean]($Member.AddAccounts -eq "TRUE")
+                "UpdateAccountContent" = [boolean]($Member.UpdateAccountContent -eq "TRUE")
+                "UpdateAccountProperties" = [boolean]($Member.UpdateAccountProperties -eq "TRUE")
+                "InitiateCPMAccountManagementOperations" = [boolean]($Member.InitiateCPMAccountManagementOperations -eq "TRUE")
+                "SpecifyNextAccountContent" = [boolean]($Member.SpecifyNextAccountContent -eq "TRUE")
+                "RenameAccounts" = [boolean]($Member.RenameAccounts -eq "TRUE")
+                "DeleteAccounts" = [boolean]($Member.DeleteAccounts -eq "TRUE")
+                "UnlockAccounts" = [boolean]($Member.UnlockAccounts -eq "TRUE")
+                "ManageSafe" = [boolean]($Member.ManageSafe -eq "TRUE")
+                "ManageSafeMembers" = [boolean]($Member.ManageSafeMembers -eq "TRUE")
+                "BackupSafe" = [boolean]($Member.BackupSafe -eq "TRUE")
+                "ViewAuditLog" = [boolean]($Member.ViewAuditLog -eq "TRUE")
+                "ViewSafeMembers" = [boolean]($Member.ViewSafeMembers -eq "TRUE")
+                "RequestsAuthorizationLevel" = [int]$Member.RequestsAuthorizationLevel
+                "AccessWithoutConfirmation" = [boolean]($Member.AccessWithoutConfirmation -eq "TRUE")
+                "CreateFolders" = [boolean]($Member.CreateFolders -eq "TRUE")
+                "DeleteFolders" = [boolean]($Member.DeleteFolders -eq "TRUE")
+                "MoveAccountsAndFolders" = [boolean]($Member.MoveAccountsAndFolders -eq "TRUE")
+            }
+        }
+    } | ConvertTo-Json -Depth 3  # Convert to JSON format
 
     Write-Log "Updating Safe Member: $MemberName in Safe: $SafeName"
 
     try {
-        Set-PASSafeMember -SafeName $SafeName -MemberName $MemberName -MemberType $MemberType -MemberLocation $MemberLocation -Permissions $Permissions -ErrorAction Stop
+        # Execute API Request
+        $response = Invoke-RestMethod -Uri $APIEndpoint -Method Put -Headers $header -Body $jsonBody -ContentType "application/json" -ErrorAction Stop
         Write-Log "Successfully updated permissions for $MemberName in $SafeName"
     }
     catch {
