@@ -11,22 +11,25 @@ Function Write-Log {
     Write-Output $LogEntry
 }
 
-# Authentication Variables
-$PCloudSubdomain = "your-subdomain"  # Change this to your actual CyberArk ISPSS subdomain
-$TenantID = "your-tenant-id"  # Replace with CyberArk Identity tenant ID
+# Step 1: Request Initial Token
+Write-Log "Requesting initial CyberArk ISPSS token..."
+$IdentityTenantID = "your-identity-tenant-id"  # Replace with CyberArk Identity tenant ID
 $ClientID = "api@cyberark.cloud"  # Replace with CyberArk API Client ID
 $ClientSecret = "your-API-password"  # Replace with CyberArk API Client Secret
-$TokenURL = "https://$TenantID.id.cyberark.cloud/oauth2/platformtoken"
+$TokenURL = "https://$IdentityTenantID.id.cyberark.cloud/oauth2/platformtoken"
 
-# Request Initial Token (Step 1)
-Write-Log "Requesting initial CyberArk ISPSS token..."
-$Body = "grant_type=client_credentials&client_id=$ClientID&client_secret=$ClientSecret"
+$TokenBody = @{
+    grant_type    = "client_credentials"
+    client_id     = $ClientID
+    client_secret = $ClientSecret
+}
+
 $headers = @{
     "Content-Type" = "application/x-www-form-urlencoded"
 }
 
 try {
-    $TokenResponse = Invoke-RestMethod -Uri $TokenURL -Method Post -Headers $headers -Body $Body
+    $TokenResponse = Invoke-RestMethod -Uri $TokenURL -Method Post -Headers $headers -Body $TokenBody
     $BearerToken = [string]$TokenResponse.access_token  # Ensure token is a string
 
     # Ensure Token is Valid
@@ -40,13 +43,13 @@ try {
     exit
 }
 
-# Define Headers for API Requests
+# Step 2: Define Headers for API Requests
 $headers = @{
     "Authorization" = "Bearer $BearerToken"
     "Content-Type"  = "application/json"
 }
 
-# Define CSV File Path
+# Step 3: Load CSV File
 $CsvFilePath = "C:\Path\To\SafeMembers.csv"
 
 # Check if CSV file exists
@@ -64,7 +67,7 @@ foreach ($Member in $SafeMembers) {
     $MemberName = $Member.Member
     $MembershipExpirationDate = [int]$Member.MembershipExpirationDate  # Convert to integer
 
-    # Verify if Safe Exists (Step 2)
+    # Step 4: Verify if Safe Exists
     Write-Log "Checking if Safe '$SafeName' exists..."
     $SafeCheckURL = "https://$PCloudSubdomain.privilegecloud.cyberark.cloud/PasswordVault/WebServices/PIMServices.svc/Safes?query=$SafeName"
 
@@ -81,10 +84,10 @@ foreach ($Member in $SafeMembers) {
         continue
     }
 
-    # Construct API URL for Safe Member Update
+    # Step 5: Construct API URL for Safe Member Update
     $APIEndpoint = "https://$PCloudSubdomain.privilegecloud.cyberark.cloud/PasswordVault/API/Safes/$SafeName/Members/$MemberName"
 
-    # Construct JSON Payload (matching API requirements)
+    # Step 6: Construct JSON Payload (matching API requirements)
     $jsonBody = @{
         "membershipExpirationDate" = $MembershipExpirationDate
         "permissions" = @{
@@ -116,7 +119,7 @@ foreach ($Member in $SafeMembers) {
     Write-Log "Updating Safe Member: $MemberName in Safe: $SafeName"
 
     try {
-        # Execute API Request using PUT method (Step 3)
+        # Step 7: Execute API Request using PUT method
         $response = Invoke-RestMethod -Uri $APIEndpoint -Method Put -Headers $headers -Body $jsonBody -ErrorAction Stop
         Write-Log "Successfully updated permissions for $MemberName in $SafeName"
     } catch {
