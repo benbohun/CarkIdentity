@@ -1,90 +1,81 @@
-if (-not (Get-Module -Name psPAS -ListAvailable)) {
-    Write-Host "psPAS module not found. Installing..."
-    Install-Module -Name psPAS -Force -Scope CurrentUser
-}
+# Import the psPAS module
 Import-Module psPAS
 
-# Define parameters
-$TenantURL = "aat4012.id.cyberark.cloud"
-$PCloudSubdomain = "cna-prod"
-$CSVFilePath = "C:\Temp\SafeMembersUpdate.csv"  # Path to CSV file with safe members
+# Define Log File
+$LogFile = "SafeMemberUpdateLog.txt"
+Function Write-Log {
+    Param ([string]$Message)
+    $Timestamp = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
+    $LogEntry = "$Timestamp - $Message"
+    Add-Content -Path $LogFile -Value $LogEntry
+    Write-Output $LogEntry
+}
 
-# Check if session is already active
-$session = Get-PASSession -ErrorAction SilentlyContinue
-if (-not $session) {
-    # Prompt for user credentials
-    $UPCreds = Get-Credential
+# Authentication Variables (User should define these)
+$TenantURL = "https://yourtenant.identity.cyberark.cloud"
+$PCloudSubdomain = "your_subdomain"
+$UPCreds = Get-Credential
 
-    # Authenticate and establish a session
+# Authenticate and start session
+Write-Log "Starting CyberArk Authentication..."
+$header = Get-IdentityHeader -IdentityTenantURL $TenantURL -psPASFormat -PCloudSubdomain $PCloudSubdomain -UPCreds $UPCreds
+Use-PASSession $header
+Write-Log "Authentication successful."
+
+# Define CSV File Path
+$CsvFilePath = "C:\Path\To\SafeMembers.csv"
+
+# Check if CSV file exists
+if (-Not (Test-Path $CsvFilePath)) {
+    Write-Log "ERROR: CSV file not found at $CsvFilePath"
+    exit
+}
+
+# Load CSV
+$SafeMembers = Import-Csv -Path $CsvFilePath
+
+# Process each Safe member
+foreach ($Member in $SafeMembers) {
+    $SafeName = $Member.SafeName
+    $MemberName = $Member.Member
+    $MemberLocation = $Member.MemberLocation
+    $MemberType = $Member.MemberType
+    
+    # Convert permission values to Boolean (CyberArk requires this)
+    $Permissions = @{
+        "UseAccounts" = [boolean]($Member.UseAccounts -eq "Yes")
+        "RetrieveAccounts" = [boolean]($Member.RetrieveAccounts -eq "Yes")
+        "ListAccounts" = [boolean]($Member.ListAccounts -eq "Yes")
+        "AddAccounts" = [boolean]($Member.AddAccounts -eq "Yes")
+        "UpdateAccountContent" = [boolean]($Member.UpdateAccountContent -eq "Yes")
+        "UpdateAccountProperties" = [boolean]($Member.UpdateAccountProperties -eq "Yes")
+        "InitiateCPMAccountManagementOperations" = [boolean]($Member.InitiateCPMAccountManagementOperations -eq "Yes")
+        "SpecifyNextAccountContent" = [boolean]($Member.SpecifyNextAccountContent -eq "Yes")
+        "RenameAccounts" = [boolean]($Member.RenameAccounts -eq "Yes")
+        "DeleteAccounts" = [boolean]($Member.DeleteAccounts -eq "Yes")
+        "UnlockAccounts" = [boolean]($Member.UnlockAccounts -eq "Yes")
+        "ManageSafe" = [boolean]($Member.ManageSafe -eq "Yes")
+        "ManageSafeMembers" = [boolean]($Member.ManageSafeMembers -eq "Yes")
+        "BackupSafe" = [boolean]($Member.BackupSafe -eq "Yes")
+        "ViewAuditLog" = [boolean]($Member.ViewAuditLog -eq "Yes")
+        "ViewSafeMembers" = [boolean]($Member.ViewSafeMembers -eq "Yes")
+        "AccessWithoutConfirmation" = [boolean]($Member.AccessWithoutConfirmation -eq "Yes")
+        "CreateFolders" = [boolean]($Member.CreateFolders -eq "Yes")
+        "DeleteFolders" = [boolean]($Member.DeleteFolders -eq "Yes")
+        "MoveAccountsAndFolders" = [boolean]($Member.MoveAccountsAndFolders -eq "Yes")
+        "RequestsAuthorizationLevel" = [int]$Member.RequestsAuthorizationLevel  # Handling 1 or 0 for RequestsAuthorizationLevel
+    }
+
+    Write-Log "Updating Safe Member: $MemberName in Safe: $SafeName"
+
     try {
-        $header = Get-IdentityHeader -IdentityTenantURL $TenantURL -psPASFormat -PCloudSubdomain $PCloudSubdomain -UPCreds $UPCreds
-        Use-PASSession $header
-        $session = Get-PASSession
-        if (-not $session) {
-            Throw "Authentication failed. Exiting script."
-        }
-        Write-Host "Authentication successful, session established."
-    } catch {
-        Write-Host "Error during authentication: $_"
-        exit 1
+        Set-PASSafeMember -SafeName $SafeName -MemberName $MemberName -MemberType $MemberType -MemberLocation $MemberLocation -Permissions $Permissions -ErrorAction Stop
+        Write-Log "Successfully updated permissions for $MemberName in $SafeName"
     }
-} else {
-    Write-Host "Existing session detected, reusing session."
+    catch {
+        Write-Log "ERROR: Failed to update permissions for $MemberName in $SafeName - $_"
+    }
 }
 
-# Read Safe Members Update CSV
-if (Test-Path $CSVFilePath) {
-    $SafeMembers = Import-Csv -Path $CSVFilePath
-    if (-not ($SafeMembers | Get-Member -Name "SafeName")) {
-        Throw "CSV file format is incorrect. Expected column: SafeName"
-    }
-
-    foreach ($Member in $SafeMembers) {
-        # Log action
-        Write-Host "Processing member $($Member.Member) for safe $($Member.SafeName)."
-
-        # Update Safe Member Permissions using Set-PASSafeMember
-        try {
-            Set-PASSafeMember -SafeName $Member.SafeName -MemberName $Member.Member -MemberType $Member.MemberType `
-                -UseAccounts ([System.Convert]::ToBoolean($Member.UseAccounts)) `
-                -RetrieveAccounts ([System.Convert]::ToBoolean($Member.RetrieveAccounts)) `
-                -ListAccounts ([System.Convert]::ToBoolean($Member.ListAccounts)) `
-                -AddAccounts ([System.Convert]::ToBoolean($Member.AddAccounts)) `
-                -UpdateAccountContent ([System.Convert]::ToBoolean($Member.UpdateAccountContent)) `
-                -UpdateAccountProperties ([System.Convert]::ToBoolean($Member.UpdateAccountProperties)) `
-                -InitiateCPMAccountManagementOperations ([System.Convert]::ToBoolean($Member.InitiateCPMAccountManagementOperations)) `
-                -SpecifyNextAccountContent ([System.Convert]::ToBoolean($Member.SpecifyNextAccountContent)) `
-                -RenameAccounts ([System.Convert]::ToBoolean($Member.RenameAccounts)) `
-                -DeleteAccounts ([System.Convert]::ToBoolean($Member.DeleteAccounts)) `
-                -UnlockAccounts ([System.Convert]::ToBoolean($Member.UnlockAccounts)) `
-                -ManageSafe ([System.Convert]::ToBoolean($Member.ManageSafe)) `
-                -ManageSafeMembers ([System.Convert]::ToBoolean($Member.ManageSafeMembers)) `
-                -BackupSafe ([System.Convert]::ToBoolean($Member.BackupSafe)) `
-                -ViewAuditLog ([System.Convert]::ToBoolean($Member.ViewAuditLog)) `
-                -ViewSafeMembers ([System.Convert]::ToBoolean($Member.ViewSafeMembers)) `
-                -RequestsAuthorizationLevel ([int]$Member.RequestsAuthorizationLevel) `
-                -AccessWithoutConfirmation ([System.Convert]::ToBoolean($Member.AccessWithoutConfirmation)) `
-                -CreateFolders ([System.Convert]::ToBoolean($Member.CreateFolders)) `
-                -DeleteFolders ([System.Convert]::ToBoolean($Member.DeleteFolders)) `
-                -MoveAccountsAndFolders ([System.Convert]::ToBoolean($Member.MoveAccountsAndFolders))
-
-            Write-Host "Successfully updated Safe Member: $($Member.Member) in Safe: $($Member.SafeName)"
-        } catch {
-            Write-Host "Error updating Safe Member: $($Member.Member) in Safe: $($Member.SafeName) - $_"
-        }
-    }
-    Write-Host "Bulk safe members update completed."
-} else {
-    Write-Host "CSV file not found: $CSVFilePath"
-}
-
-# End Session
-try {
-    if ($session) {
-        Write-Host "Logging off session..."
-        Disconnect-PASSession
-        Write-Host "Session logged off successfully."
-    }
-} catch {
-    Write-Host "Error logging off session: $_"
-}
+# End session
+Write-Log "Safe member permission update process completed."
