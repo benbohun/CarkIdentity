@@ -58,22 +58,25 @@ foreach ($Member in $SafeMembers) {
     $MemberName = $Member.Member
     $MembershipExpirationDate = [int]$Member.MembershipExpirationDate  # Convert to integer
 
-    # URL-encode SafeName
-    $SafeUrlId = [System.Web.HttpUtility]::UrlEncode($SafeName)
-
-    # Validate Safe Exists
+    # Verify if Safe Exists (Step 2)
     Write-Log "Checking if Safe '$SafeName' exists..."
-    $SafeCheckURL = "https://$PCloudSubdomain.privilegecloud.cyberark.cloud/PasswordVault/API/Safes/$SafeUrlId"
+    $SafeCheckURL = "https://$PCloudSubdomain.privilegecloud.cyberark.cloud/PasswordVault/WebServices/PIMServices.svc/Safes?query=$SafeName"
+
     try {
-        $SafeExists = Invoke-RestMethod -Uri $SafeCheckURL -Method Get -Headers $headers
-        Write-Log "Safe '$SafeName' found, proceeding with update..."
+        $SafeResponse = Invoke-RestMethod -Uri $SafeCheckURL -Method Get -Headers $headers
+        if ($SafeResponse.Safes -and $SafeResponse.Safes.Count -gt 0) {
+            Write-Log "Safe '$SafeName' found, proceeding with update..."
+        } else {
+            Write-Log "ERROR: Safe '$SafeName' not found. Skipping update."
+            continue
+        }
     } catch {
-        Write-Log "ERROR: Safe '$SafeName' not found. Skipping update."
+        Write-Log "ERROR: Failed to verify Safe '$SafeName'. Skipping update. $_"
         continue
     }
 
-    # Construct API URL
-    $APIEndpoint = "https://$PCloudSubdomain.privilegecloud.cyberark.cloud/PasswordVault/API/Safes/$SafeUrlId/Members/$MemberName"
+    # Construct API URL for Safe Member Update
+    $APIEndpoint = "https://$PCloudSubdomain.privilegecloud.cyberark.cloud/PasswordVault/API/Safes/$SafeName/Members/$MemberName"
 
     # Construct JSON Payload (matching API requirements)
     $jsonBody = @{
