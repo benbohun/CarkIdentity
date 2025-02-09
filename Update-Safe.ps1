@@ -70,33 +70,16 @@ if (-Not (Test-Path $CsvFilePath)) {
 # Load CSV
 $SafeMembers = Import-Csv -Path $CsvFilePath
 
-# Process each Safe member
+# Process each Safe member (Skipping Safe validation)
 foreach ($Member in $SafeMembers) {
     $SafeName = $Member.SafeName
     $MemberName = $Member.Member
     $MembershipExpirationDate = [int]$Member.MembershipExpirationDate  # Convert to integer
 
-    # Step 5: Verify if Safe Exists
-    Write-Log "Checking if Safe '$SafeName' exists..."
-    $SafeCheckURL = "https://$PCloudSubdomain.privilegecloud.cyberark.cloud/PasswordVault/WebServices/PIMServices.svc/Safes?query=$SafeName"
-
-    try {
-        $SafeResponse = Invoke-RestMethod -Uri $SafeCheckURL -Method Get -Headers $headers
-        if ($SafeResponse.Safes -and $SafeResponse.Safes.Count -gt 0) {
-            Write-Log "Safe '$SafeName' found, proceeding with update..."
-        } else {
-            Write-Log "ERROR: Safe '$SafeName' not found. Skipping update."
-            continue
-        }
-    } catch {
-        Write-Log "ERROR: Failed to verify Safe '$SafeName'. $_"
-        continue
-    }
-
-    # Step 6: Construct API URL for Safe Member Update
+    # Step 5: Construct API URL for Safe Member Update
     $APIEndpoint = "https://$PCloudSubdomain.privilegecloud.cyberark.cloud/PasswordVault/API/Safes/$SafeName/Members/$MemberName"
 
-    # Step 7: Construct JSON Payload (matching API requirements)
+    # Step 6: Construct JSON Payload (matching API requirements)
     $jsonBody = @{
         "membershipExpirationDate" = $MembershipExpirationDate
         "permissions" = @{
@@ -128,7 +111,7 @@ foreach ($Member in $SafeMembers) {
     Write-Log "Updating Safe Member: $MemberName in Safe: $SafeName"
 
     try {
-        # Step 8: Execute API Request using PUT method
+        # Step 7: Execute API Request using PUT method
         $response = Invoke-RestMethod -Uri $APIEndpoint -Method Put -Headers $headers -Body $jsonBody -ErrorAction Stop
         Write-Log "Successfully updated permissions for $MemberName in $SafeName"
     } catch {
