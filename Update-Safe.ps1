@@ -61,6 +61,17 @@ foreach ($Member in $SafeMembers) {
     # URL-encode SafeName
     $SafeUrlId = [System.Web.HttpUtility]::UrlEncode($SafeName)
 
+    # Validate Safe Exists
+    Write-Log "Checking if Safe '$SafeName' exists..."
+    $SafeCheckURL = "https://$PCloudSubdomain.privilegecloud.cyberark.cloud/PasswordVault/API/Safes/$SafeUrlId"
+    try {
+        $SafeExists = Invoke-RestMethod -Uri $SafeCheckURL -Method Get -Headers $headers
+        Write-Log "Safe '$SafeName' found, proceeding with update..."
+    } catch {
+        Write-Log "ERROR: Safe '$SafeName' not found. Skipping update."
+        continue
+    }
+
     # Construct API URL
     $APIEndpoint = "https://$PCloudSubdomain.privilegecloud.cyberark.cloud/PasswordVault/API/Safes/$SafeUrlId/Members/$MemberName"
 
@@ -99,11 +110,9 @@ foreach ($Member in $SafeMembers) {
         # Execute API Request using PUT method (Step 3)
         $response = Invoke-RestMethod -Uri $APIEndpoint -Method Put -Headers $headers -Body $jsonBody -ErrorAction Stop
         Write-Log "Successfully updated permissions for $MemberName in $SafeName"
-    }
-    catch {
+    } catch {
         Write-Log "ERROR: Failed to update permissions for $MemberName in $SafeName - $_"
     }
 }
 
-# End session
 Write-Log "Safe member permission update process completed."
