@@ -28,13 +28,19 @@ $headers = @{
 try {
     $TokenResponse = Invoke-RestMethod -Uri $TokenURL -Method Post -Headers $headers -Body $Body
     $BearerToken = [string]$TokenResponse.access_token  # Ensure token is a string
+
+    # Ensure Token is Valid
+    if ($BearerToken.Length -lt 100) {
+        Write-Log "ERROR: Received an invalid token. Length: $($BearerToken.Length)"
+        exit
+    }
     Write-Log "Authentication successful, token obtained."
 } catch {
     Write-Log "ERROR: Failed to authenticate with CyberArk ISPSS. $_"
     exit
 }
 
-# Define Headers for API Requests (Step 2)
+# Define Headers for API Requests
 $headers = @{
     "Authorization" = "Bearer $BearerToken"
     "Content-Type"  = "application/json"
@@ -71,7 +77,7 @@ foreach ($Member in $SafeMembers) {
             continue
         }
     } catch {
-        Write-Log "ERROR: Failed to verify Safe '$SafeName'. Skipping update. $_"
+        Write-Log "ERROR: Failed to verify Safe '$SafeName'. $_"
         continue
     }
 
@@ -88,6 +94,20 @@ foreach ($Member in $SafeMembers) {
             "addAccounts" = [boolean]($Member.AddAccounts -eq "TRUE")
             "updateAccountContent" = [boolean]($Member.UpdateAccountContent -eq "TRUE")
             "updateAccountProperties" = [boolean]($Member.UpdateAccountProperties -eq "TRUE")
+            "initiateCPMAccountManagementOperations" = [boolean]($Member.InitiateCPMAccountManagementOperations -eq "TRUE")
+            "specifyNextAccountContent" = [boolean]($Member.SpecifyNextAccountContent -eq "TRUE")
+            "renameAccounts" = [boolean]($Member.RenameAccounts -eq "TRUE")
+            "deleteAccounts" = [boolean]($Member.DeleteAccounts -eq "TRUE")
+            "unlockAccounts" = [boolean]($Member.UnlockAccounts -eq "TRUE")
+            "manageSafe" = [boolean]($Member.ManageSafe -eq "TRUE")
+            "manageSafeMembers" = [boolean]($Member.ManageSafeMembers -eq "TRUE")
+            "backupSafe" = [boolean]($Member.BackupSafe -eq "TRUE")
+            "viewAuditLog" = [boolean]($Member.ViewAuditLog -eq "TRUE")
+            "viewSafeMembers" = [boolean]($Member.ViewSafeMembers -eq "TRUE")
+            "accessWithoutConfirmation" = [boolean]($Member.AccessWithoutConfirmation -eq "TRUE")
+            "createFolders" = [boolean]($Member.CreateFolders -eq "TRUE")
+            "deleteFolders" = [boolean]($Member.DeleteFolders -eq "TRUE")
+            "moveAccountsAndFolders" = [boolean]($Member.MoveAccountsAndFolders -eq "TRUE")
             "requestsAuthorizationLevel1" = [boolean]($Member.RequestsAuthorizationLevel1 -eq "TRUE")
             "requestsAuthorizationLevel2" = [boolean]($Member.RequestsAuthorizationLevel2 -eq "TRUE")
         }
