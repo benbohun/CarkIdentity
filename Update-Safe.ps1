@@ -13,17 +13,13 @@ Function Write-Log {
 
 # Authentication Variables
 $PCloudSubdomain = "your-subdomain"  # Change this to your actual subdomain
-$TenantURL = "https://$PCloudSubdomain.privilegecloud.cyberark.com"
+$TenantURL = "https://$PCloudSubdomain.privilegecloud.cyberark.cloud/PasswordVault"
 $UPCreds = Get-Credential
 
 # Authenticate and start session
 Write-Log "Starting CyberArk Authentication..."
-$session = Get-IdentityHeader -IdentityTenantURL $TenantURL -psPASFormat -PCloudSubdomain $PCloudSubdomain -UPCreds $UPCreds
-Use-PASSession $session
-
-# Verify session
-$sessionCheck = Get-PASSession
-if ($sessionCheck) {
+$session = New-PASSession -Credential $UPCreds -BaseURI $TenantURL
+if ($session) {
     Write-Log "Authentication successful, session established."
 } else {
     Write-Log "ERROR: Authentication failed. Exiting script."
@@ -31,7 +27,7 @@ if ($sessionCheck) {
 }
 
 # Extract Token for API Calls
-$AuthToken = $session.Authorization -replace 'Bearer ', ''
+$AuthToken = $session.Token
 $headers = @{
     "Authorization" = "Bearer $AuthToken"
     "Content-Type"  = "application/json"
@@ -46,9 +42,6 @@ if (-Not (Test-Path $CsvFilePath)) {
     exit
 }
 
-# CyberArk ISPSS Cloud API Base URL
-$CyberArkAPIBase = "https://$PCloudSubdomain.privilegecloud.cyberark.com/PasswordVault/WebServices/PIMServices.svc"
-
 # Load CSV
 $SafeMembers = Import-Csv -Path $CsvFilePath
 
@@ -56,47 +49,48 @@ $SafeMembers = Import-Csv -Path $CsvFilePath
 foreach ($Member in $SafeMembers) {
     $SafeName = $Member.SafeName
     $MemberName = $Member.Member
-    $MemberLocation = $Member.MemberLocation
-    $MemberType = $Member.MemberType
+    $MembershipExpirationDate = [int]$Member.MembershipExpirationDate  # Convert to integer
+
+    # URL-encode SafeName
+    $SafeUrlId = [System.Web.HttpUtility]::UrlEncode($SafeName)
 
     # Construct API URL
-    $APIEndpoint = "$CyberArkAPIBase/Safes/$SafeName/Members/$MemberName"
+    $APIEndpoint = "$TenantURL/API/Safes/$SafeUrlId/Members/$MemberName"
 
-    # Convert TRUE/FALSE permissions to boolean and RequestsAuthorizationLevel to integer
+    # Construct JSON Payload (matching API requirements)
     $jsonBody = @{
-        "member" = @{
-            "MemberName" = $MemberName
-            "Permissions" = @{
-                "UseAccounts" = [boolean]($Member.UseAccounts -eq "TRUE")
-                "RetrieveAccounts" = [boolean]($Member.RetrieveAccounts -eq "TRUE")
-                "ListAccounts" = [boolean]($Member.ListAccounts -eq "TRUE")
-                "AddAccounts" = [boolean]($Member.AddAccounts -eq "TRUE")
-                "UpdateAccountContent" = [boolean]($Member.UpdateAccountContent -eq "TRUE")
-                "UpdateAccountProperties" = [boolean]($Member.UpdateAccountProperties -eq "TRUE")
-                "InitiateCPMAccountManagementOperations" = [boolean]($Member.InitiateCPMAccountManagementOperations -eq "TRUE")
-                "SpecifyNextAccountContent" = [boolean]($Member.SpecifyNextAccountContent -eq "TRUE")
-                "RenameAccounts" = [boolean]($Member.RenameAccounts -eq "TRUE")
-                "DeleteAccounts" = [boolean]($Member.DeleteAccounts -eq "TRUE")
-                "UnlockAccounts" = [boolean]($Member.UnlockAccounts -eq "TRUE")
-                "ManageSafe" = [boolean]($Member.ManageSafe -eq "TRUE")
-                "ManageSafeMembers" = [boolean]($Member.ManageSafeMembers -eq "TRUE")
-                "BackupSafe" = [boolean]($Member.BackupSafe -eq "TRUE")
-                "ViewAuditLog" = [boolean]($Member.ViewAuditLog -eq "TRUE")
-                "ViewSafeMembers" = [boolean]($Member.ViewSafeMembers -eq "TRUE")
-                "RequestsAuthorizationLevel" = [int]($Member.RequestsAuthorizationLevel)
-                "AccessWithoutConfirmation" = [boolean]($Member.AccessWithoutConfirmation -eq "TRUE")
-                "CreateFolders" = [boolean]($Member.CreateFolders -eq "TRUE")
-                "DeleteFolders" = [boolean]($Member.DeleteFolders -eq "TRUE")
-                "MoveAccountsAndFolders" = [boolean]($Member.MoveAccountsAndFolders -eq "TRUE")
-            }
+        "membershipExpirationDate" = $MembershipExpirationDate
+        "permissions" = @{
+            "useAccounts" = [boolean]($Member.UseAccounts -eq "TRUE")
+            "retrieveAccounts" = [boolean]($Member.RetrieveAccounts -eq "TRUE")
+            "listAccounts" = [boolean]($Member.ListAccounts -eq "TRUE")
+            "addAccounts" = [boolean]($Member.AddAccounts -eq "TRUE")
+            "updateAccountContent" = [boolean]($Member.UpdateAccountContent -eq "TRUE")
+            "updateAccountProperties" = [boolean]($Member.UpdateAccountProperties -eq "TRUE")
+            "initiateCPMAccountManagementOperations" = [boolean]($Member.InitiateCPMAccountManagementOperations -eq "TRUE")
+            "specifyNextAccountContent" = [boolean]($Member.SpecifyNextAccountContent -eq "TRUE")
+            "renameAccounts" = [boolean]($Member.RenameAccounts -eq "TRUE")
+            "deleteAccounts" = [boolean]($Member.DeleteAccounts -eq "TRUE")
+            "unlockAccounts" = [boolean]($Member.UnlockAccounts -eq "TRUE")
+            "manageSafe" = [boolean]($Member.ManageSafe -eq "TRUE")
+            "manageSafeMembers" = [boolean]($Member.ManageSafeMembers -eq "TRUE")
+            "backupSafe" = [boolean]($Member.BackupSafe -eq "TRUE")
+            "viewAuditLog" = [boolean]($Member.ViewAuditLog -eq "TRUE")
+            "viewSafeMembers" = [boolean]($Member.ViewSafeMembers -eq "TRUE")
+            "accessWithoutConfirmation" = [boolean]($Member.AccessWithoutConfirmation -eq "TRUE")
+            "createFolders" = [boolean]($Member.CreateFolders -eq "TRUE")
+            "deleteFolders" = [boolean]($Member.DeleteFolders -eq "TRUE")
+            "moveAccountsAndFolders" = [boolean]($Member.MoveAccountsAndFolders -eq "TRUE")
+            "requestsAuthorizationLevel1" = [boolean]($Member.RequestsAuthorizationLevel1 -eq "TRUE")
+            "requestsAuthorizationLevel2" = [boolean]($Member.RequestsAuthorizationLevel2 -eq "TRUE")
         }
     } | ConvertTo-Json -Depth 3  # Convert to JSON format
 
     Write-Log "Updating Safe Member: $MemberName in Safe: $SafeName"
 
     try {
-        # Execute API Request
-        $response = Invoke-RestMethod -Uri $APIEndpoint -Method Put -Headers $headers -Body $jsonBody -ContentType "application/json" -ErrorAction Stop
+        # Execute API Request using PUT method
+        $response = Invoke-RestMethod -Uri $APIEndpoint -Method Put -Headers $headers -Body $jsonBody -ErrorAction Stop
         Write-Log "Successfully updated permissions for $MemberName in $SafeName"
     }
     catch {
