@@ -18,9 +18,16 @@ $UPCreds = Get-Credential
 
 # Authenticate and start session
 Write-Log "Starting CyberArk Authentication..."
-$header = Get-IdentityHeader -IdentityTenantURL $TenantURL -psPASFormat -PCloudSubdomain $PCloudSubdomain -UPCreds $UPCreds
-Use-PASSession $header
+$session = Get-IdentityHeader -IdentityTenantURL $TenantURL -psPASFormat -PCloudSubdomain $PCloudSubdomain -UPCreds $UPCreds
+Use-PASSession $session
 Write-Log "Authentication successful."
+
+# Extract Token for API Calls
+$AuthToken = $session.Authorization
+$headers = @{
+    "Authorization" = $AuthToken
+    "Content-Type"  = "application/json"
+}
 
 # Define CSV File Path
 $CsvFilePath = "C:\Path\To\SafeMembers.csv"
@@ -47,7 +54,7 @@ foreach ($Member in $SafeMembers) {
     # Construct API URL
     $APIEndpoint = "$CyberArkAPIBase/Safes/$SafeName/Members/$MemberName"
 
-    # Construct JSON Payload
+    # Convert TRUE/FALSE permissions to boolean and RequestsAuthorizationLevel to integer
     $jsonBody = @{
         "member" = @{
             "MemberName" = $MemberName
@@ -68,7 +75,7 @@ foreach ($Member in $SafeMembers) {
                 "BackupSafe" = [boolean]($Member.BackupSafe -eq "TRUE")
                 "ViewAuditLog" = [boolean]($Member.ViewAuditLog -eq "TRUE")
                 "ViewSafeMembers" = [boolean]($Member.ViewSafeMembers -eq "TRUE")
-                "RequestsAuthorizationLevel" = [int]$Member.RequestsAuthorizationLevel
+                "RequestsAuthorizationLevel" = [int]($Member.RequestsAuthorizationLevel)  # Fix: Convert to Integer
                 "AccessWithoutConfirmation" = [boolean]($Member.AccessWithoutConfirmation -eq "TRUE")
                 "CreateFolders" = [boolean]($Member.CreateFolders -eq "TRUE")
                 "DeleteFolders" = [boolean]($Member.DeleteFolders -eq "TRUE")
@@ -81,7 +88,7 @@ foreach ($Member in $SafeMembers) {
 
     try {
         # Execute API Request
-        $response = Invoke-RestMethod -Uri $APIEndpoint -Method Put -Headers $header -Body $jsonBody -ContentType "application/json" -ErrorAction Stop
+        $response = Invoke-RestMethod -Uri $APIEndpoint -Method Put -Headers $headers -Body $jsonBody -ContentType "application/json" -ErrorAction Stop
         Write-Log "Successfully updated permissions for $MemberName in $SafeName"
     }
     catch {
