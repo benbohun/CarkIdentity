@@ -22,10 +22,16 @@ $session = Get-IdentityHeader -IdentityTenantURL $TenantURL -psPASFormat -PCloud
 Use-PASSession $session
 Write-Log "Authentication successful."
 
+# Check if session has an authorization token
+if (-not $session.Authorization) {
+    Write-Log "ERROR: Authorization token not received. Check authentication details."
+    exit
+}
+
 # Extract Token for API Calls
-$AuthToken = $session.Authorization
+$AuthToken = $session.Authorization -replace 'Bearer ', '' # Ensure token is clean
 $headers = @{
-    "Authorization" = $AuthToken
+    "Authorization" = "Bearer $AuthToken"
     "Content-Type"  = "application/json"
 }
 
@@ -75,7 +81,7 @@ foreach ($Member in $SafeMembers) {
                 "BackupSafe" = [boolean]($Member.BackupSafe -eq "TRUE")
                 "ViewAuditLog" = [boolean]($Member.ViewAuditLog -eq "TRUE")
                 "ViewSafeMembers" = [boolean]($Member.ViewSafeMembers -eq "TRUE")
-                "RequestsAuthorizationLevel" = [int]($Member.RequestsAuthorizationLevel)  # Fix: Convert to Integer
+                "RequestsAuthorizationLevel" = [int]($Member.RequestsAuthorizationLevel)
                 "AccessWithoutConfirmation" = [boolean]($Member.AccessWithoutConfirmation -eq "TRUE")
                 "CreateFolders" = [boolean]($Member.CreateFolders -eq "TRUE")
                 "DeleteFolders" = [boolean]($Member.DeleteFolders -eq "TRUE")
