@@ -11,17 +11,16 @@ Function Write-Log {
     Write-Output $LogEntry
 }
 
-# Step 1: Define Required Variables
-$IdentityTenantID = Read-Host "Enter your CyberArk Identity Tenant ID"  
-$PCloudSubdomain = Read-Host "Enter your CyberArk Privilege Cloud Subdomain"
+# Step 1: Define Required Variables (Only prompt for Client ID & Secret)
+$IdentityTenantID = "your-identity-tenant-id"  # Replace with actual CyberArk Identity tenant ID
+$PCloudSubdomain = "your-pcloud-subdomain"  # Replace with actual CyberArk Privilege Cloud Subdomain
 $ClientID = Read-Host "Enter your CyberArk API Client ID"
 $ClientSecret = Read-Host "Enter your CyberArk API Client Secret" -AsSecureString
 $ClientSecret = [System.Net.NetworkCredential]::new("", $ClientSecret).Password  # Convert SecureString to plain text
 
 # Ensure variables are set correctly
-if ([string]::IsNullOrEmpty($IdentityTenantID) -or [string]::IsNullOrEmpty($PCloudSubdomain) -or 
-    [string]::IsNullOrEmpty($ClientID) -or [string]::IsNullOrEmpty($ClientSecret)) {
-    Write-Log "ERROR: Required input is missing. Exiting..."
+if ([string]::IsNullOrEmpty($ClientID) -or [string]::IsNullOrEmpty($ClientSecret)) {
+    Write-Log "ERROR: Client ID or Client Secret is missing. Exiting..."
     exit
 }
 
@@ -60,8 +59,8 @@ $headers = @{
     "Content-Type"  = "application/json"
 }
 
-# Step 4: Load CSV File
-$CsvFilePath = Read-Host "Enter the full path to the CSV file containing Safe Members"
+# Step 4: Load CSV File (Hardcoded Path)
+$CsvFilePath = "C:\Path\To\SafeMembers.csv"
 
 # Check if CSV file exists
 if (-Not (Test-Path $CsvFilePath)) {
