@@ -1,22 +1,3 @@
-$TenantID = "your-tenant-id"  # Replace with your CyberArk Identity tenant ID
-$ClientID = "api@cyberark.cloud"  # Replace with CyberArk API Client ID
-$ClientSecret = "your-API-password"  # Replace with CyberArk API Client Secret
-$TokenURL = "https://$TenantID.id.cyberark.cloud/oauth2/platformtoken"
-
-$Body = @{
-    "grant_type"    = "client_credentials"
-    "client_id"     = $ClientID
-    "client_secret" = $ClientSecret
-}
-
-$headers = @{
-    "Content-Type" = "application/x-www-form-urlencoded"
-}
-
-try {
-    $TokenResponse = Invoke-RestMethod -Uri $TokenURL -Method Post -Headers $headers -Body $Body
-    Write-Output "Raw Token Response: $TokenResponse"
-    Write-Output "Access Token: $($TokenResponse.access_token)"
-} catch {
-    Write-Output "ERROR: Failed to authenticate - $_"
-}
+SafeName,Member,MemberType,MembershipExpirationDate,UseAccounts,RetrieveAccounts,ListAccounts,AddAccounts,UpdateAccountContent,UpdateAccountProperties,InitiateCPMAccountManagementOperations,SpecifyNextAccountContent,RenameAccounts,DeleteAccounts,UnlockAccounts,ManageSafe,ManageSafeMembers,BackupSafe,ViewAuditLog,ViewSafeMembers,AccessWithoutConfirmation,CreateFolders,DeleteFolders,MoveAccountsAndFolders,RequestsAuthorizationLevel1,RequestsAuthorizationLevel2
+FinanceSafe,JohnDoe,Group,1667472534,TRUE,FALSE,TRUE,FALSE,TRUE,FALSE,TRUE,FALSE,TRUE,FALSE,FALSE,TRUE,TRUE,FALSE,TRUE,TRUE,FALSE,TRUE,FALSE,TRUE,TRUE,FALSE
+ITSafe,AdminUser,User,1667472534,TRUE,TRUE,TRUE,FALSE,TRUE,FALSE,TRUE,FALSE,FALSE,FALSE,FALSE,TRUE,TRUE,TRUE,FALSE,TRUE,TRUE,FALSE,TRUE,FALSE,TRUE,FALSE
