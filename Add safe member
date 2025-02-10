@@ -87,7 +87,7 @@ foreach ($Member in $SafeMembers) {
     # Step 5: Construct API URL for Adding Member to Safe
     $APIEndpoint = "https://$PCloudSubdomain.privilegecloud.cyberark.cloud/PasswordVault/API/Safes/$SafeName/Members/"
 
-    # Step 6: Construct JSON Payload
+    # Step 6: Construct JSON Payload from CSV
     $jsonBody = @{
         "memberName" = $MemberName
         "searchIn" = "Vault"
