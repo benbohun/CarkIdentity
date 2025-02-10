@@ -80,7 +80,7 @@ foreach ($Member in $SafeMembers) {
 
     # Ensure MemberType is valid
     if ($MemberType -notin @("User", "Group", "Role")) {
-        Write-Log "❌ ERROR: Invalid MemberType '$MemberType' for $MemberName in Safe: $SafeName. Skipping..."
+        Write-Log "❌ ERROR: Invalid MemberType '${MemberType}' for ${MemberName} in Safe: ${SafeName}. Skipping..."
         continue
     }
 
@@ -119,14 +119,14 @@ foreach ($Member in $SafeMembers) {
         "MemberType" = $MemberType
     } | ConvertTo-Json -Depth 3  # Convert to JSON format
 
-    Write-Log "Adding $MemberType: $MemberName to Safe: $SafeName"
+    Write-Log "Adding ${MemberType}: ${MemberName} to Safe: ${SafeName}"
 
     try {
         # Step 7: Execute API Request using POST method
         $response = Invoke-RestMethod -Uri $APIEndpoint -Method Post -Headers $headers -Body $jsonBody -ErrorAction Stop
-        Write-Log "✅ Successfully added $MemberType: $MemberName to $SafeName"
+        Write-Log "✅ Successfully added ${MemberType}: ${MemberName} to ${SafeName}"
     } catch {
-        Write-Log "❌ ERROR: Failed to add $MemberType: $MemberName to $SafeName - $_"
+        Write-Log "❌ ERROR: Failed to add ${MemberType}: ${MemberName} to ${SafeName} - $_"
     }
 }
 
