@@ -12,14 +12,16 @@ Function Write-Log {
 }
 
 # Step 1: Define Required Variables
-$IdentityTenantID = "your-identity-tenant-id"  # Replace with actual CyberArk Identity tenant ID
-$PCloudSubdomain = "your-pcloud-subdomain"  # Replace with your actual CyberArk PCloud Subdomain
-$ClientID = "api@cyberark.cloud"  # Replace with actual Client ID
-$ClientSecret = "your-API-password"  # Replace with actual Client Secret
+$IdentityTenantID = Read-Host "Enter your CyberArk Identity Tenant ID"  
+$PCloudSubdomain = Read-Host "Enter your CyberArk Privilege Cloud Subdomain"
+$ClientID = Read-Host "Enter your CyberArk API Client ID"
+$ClientSecret = Read-Host "Enter your CyberArk API Client Secret" -AsSecureString
+$ClientSecret = [System.Net.NetworkCredential]::new("", $ClientSecret).Password  # Convert SecureString to plain text
 
 # Ensure variables are set correctly
-if ([string]::IsNullOrEmpty($IdentityTenantID) -or [string]::IsNullOrEmpty($PCloudSubdomain)) {
-    Write-Log "ERROR: IdentityTenantID or PCloudSubdomain is missing. Exiting..."
+if ([string]::IsNullOrEmpty($IdentityTenantID) -or [string]::IsNullOrEmpty($PCloudSubdomain) -or 
+    [string]::IsNullOrEmpty($ClientID) -or [string]::IsNullOrEmpty($ClientSecret)) {
+    Write-Log "ERROR: Required input is missing. Exiting..."
     exit
 }
 
@@ -59,7 +61,7 @@ $headers = @{
 }
 
 # Step 4: Load CSV File
-$CsvFilePath = "C:\Path\To\SafeMembers.csv"
+$CsvFilePath = Read-Host "Enter the full path to the CSV file containing Safe Members"
 
 # Check if CSV file exists
 if (-Not (Test-Path $CsvFilePath)) {
@@ -113,10 +115,10 @@ foreach ($Member in $SafeMembers) {
     try {
         # Step 7: Execute API Request using PUT method
         $response = Invoke-RestMethod -Uri $APIEndpoint -Method Put -Headers $headers -Body $jsonBody -ErrorAction Stop
-        Write-Log "Successfully updated permissions for $MemberName in $SafeName"
+        Write-Log "✅ Successfully updated permissions for $MemberName in $SafeName"
     } catch {
-        Write-Log "ERROR: Failed to update permissions for $MemberName in $SafeName - $_"
+        Write-Log "❌ ERROR: Failed to update permissions for $MemberName in $SafeName - $_"
     }
 }
 
-Write-Log "Safe member permission update process completed."
+Write-Log "🔹 Safe member permission update process completed."
