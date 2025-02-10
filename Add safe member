@@ -59,8 +59,8 @@ $headers = @{
     "Content-Type"  = "application/json"
 }
 
-# Step 4: Load CSV File (Prompt for Path)
-$CsvFilePath = Read-Host "Enter the full path to the CSV file containing Safe Members"
+# Step 4: Load CSV File (Hardcoded Path)
+$CsvFilePath = "C:\Path\To\SafeMembers.csv"  # Update this path to your actual CSV file
 
 # Check if CSV file exists
 if (-Not (Test-Path $CsvFilePath)) {
