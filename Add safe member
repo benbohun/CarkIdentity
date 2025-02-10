@@ -75,8 +75,14 @@ $SafeMembers = Import-Csv -Path $CsvFilePath
 foreach ($Member in $SafeMembers) {
     $SafeName = $Member.SafeName
     $MemberName = $Member.Member
-    $MemberType = $Member.MemberType  # User, Group, or Role
     $MembershipExpirationDate = [int]$Member.MembershipExpirationDate  # Convert to integer
+    $MemberType = $Member.MemberType  # User, Group, or Role
+
+    # Ensure MemberType is valid
+    if ($MemberType -notin @("User", "Group", "Role")) {
+        Write-Log "❌ ERROR: Invalid MemberType '$MemberType' for $MemberName in Safe: $SafeName. Skipping..."
+        continue
+    }
 
     # Step 5: Construct API URL for Adding Member to Safe
     $APIEndpoint = "https://$PCloudSubdomain.privilegecloud.cyberark.cloud/PasswordVault/API/Safes/$SafeName/Members/"
