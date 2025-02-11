@@ -13,32 +13,12 @@ Use-PASSession $header
 # Fetch all PAS accounts
 $PASAccounts = Get-PASAccount
 
-# Inspect the structure of the first account
-Write-Output "First account structure:"
-$PASAccounts | Select-Object -First 1 | Format-List *
-
-# Extract and format data for CSV export
-$PASAccountsFormatted = $PASAccounts | ForEach-Object {
-    [PSCustomObject]@{
-        AccountID                   = $_.id  # Try `id` instead of `AccountID`
-        Safe                        = $_.safeName  # Try `safeName` instead of `Safe`
-        Address                     = $_.address
-        UserName                    = $_.userName
-        Name                        = $_.name
-        PlatformId                  = $_.platformId
-        SecretType                  = $_.secretType
-        PlatformAccountProperties    = ($_.'platformAccountProperties' -join "; ")
-        SecretManagement             = ($_.'secretManagement' -join "; ")
-        CreatedTime                 = $_.createdTime
-        CategoryModificationTime     = $_.categoryModificationTime
-    }
-}
-
 # Define CSV export path
 $exportPath = "C:\PASAccounts.csv"
 
-# Export to CSV
-$PASAccountsFormatted | Export-Csv -Path $exportPath -NoTypeInformation
+# Select required fields and export to CSV
+$PASAccounts | Select-Object id, safeName, address, userName, name, platformId, secretType, platformAccountProperties, secretManagement, createdTime, categoryModificationTime |
+Export-Csv -Path $exportPath -NoTypeInformation
 
 # Output completion message
 Write-Output "PAS accounts have been exported to: $exportPath"
