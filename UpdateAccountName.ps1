@@ -74,43 +74,30 @@ $Accounts = Import-Csv -Path $CsvFilePath
 # Process each Account update
 foreach ($Account in $Accounts) {
     $AccountID = $Account.AccountID
-    $Name = $Account.Name
-    $Address = $Account.Address
-    $UserName = $Account.userName
-    $PlatformId = $Account.platformId
-    $PlatformAccountProperties = $Account.platformAccountProperties
+    $NewName = $Account.Name  # Use Name from CSV as the new account name
 
-    # Construct new Name using PlatformID, Address, and UserName
-    $NewName = "$PlatformId-$Address-$UserName"
-
-    # Step 5: Construct API URL for Updating Account
+    # Step 5: Construct API URL for Updating Account Name
     $APIEndpoint = "https://$PCloudSubdomain.privilegecloud.cyberark.cloud/PasswordVault/API/Accounts/$AccountID/"
 
-    # Step 6: Construct JSON Payload for PATCH request
+    # Step 6: Construct JSON Payload for PATCH request (Updating only Name)
     $jsonBody = @(
-        @{ "op" = "replace"; "path" = "/name"; "value" = $NewName },
-        @{ "op" = "replace"; "path" = "/address"; "value" = $Address },
-        @{ "op" = "replace"; "path" = "/userName"; "value" = $UserName },
-        @{ "op" = "replace"; "path" = "/platformId"; "value" = $PlatformId },
-        @{ "op" = "replace"; "path" = "/platformAccountProperties"; "value" = $PlatformAccountProperties }
+        @{ "op" = "replace"; "path" = "/name"; "value" = $NewName }
     ) | ConvertTo-Json -Depth 3
 
-    Write-Log "Updating Account ID: ${AccountID} with new properties."
+    Write-Log "Updating Name for Account ID: ${AccountID} to '${NewName}'"
 
     try {
         # Step 7: Execute API Request using PATCH method
         $response = Invoke-RestMethod -Uri $APIEndpoint -Method Patch -Headers $headers -Body $jsonBody -ErrorAction Stop
-        Write-Log "✅ Successfully updated Account ID: ${AccountID}"
+        Write-Log "✅ Successfully updated Name for Account ID: ${AccountID} to '${NewName}'"
     } catch {
-        Write-Log "❌ ERROR: Failed to update Account ID: ${AccountID} - $_"
+        Write-Log "❌ ERROR: Failed to update Name for Account ID: ${AccountID} - $_"
     }
 }
 
-Write-Log "🔹 Bulk Account update process completed."
+Write-Log "🔹 Bulk Account Name update process completed."
 
 
-
-AccountID,Name,Address,userName,platformId,platformAccountProperties
-123456,OldAccountName,10.10.27.254,AdminUser,WindowsPlatform,"{""key1"":""value1"",""key2"":""value2""}"
-789012,AnotherAccount,192.168.1.1,TestUser,LinuxPlatform,"{""customProperty"":""customValue""}"
-
+AccountID,Name
+123456,UpdatedAccountName1
+789012,UpdatedAccountName2
