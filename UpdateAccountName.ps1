@@ -81,10 +81,15 @@ foreach ($Account in $Accounts) {
 
     # Step 6: Construct JSON Payload for PATCH request (Updating only Name)
     $jsonBody = @(
-        @{ "op" = "replace"; "path" = "/name"; "value" = $NewName }
-    ) | ConvertTo-Json -Depth 3
+        @{
+            "op" = "replace"
+            "path" = "/name"
+            "value" = $NewName
+        }
+    ) | ConvertTo-Json -Depth 3 -Compress  # Use compressed JSON format
 
     Write-Log "Updating Name for Account ID: ${AccountID} to '${NewName}'"
+    Write-Log "Payload Sent: $jsonBody"
 
     try {
         # Step 7: Execute API Request using PATCH method
@@ -96,8 +101,3 @@ foreach ($Account in $Accounts) {
 }
 
 Write-Log "🔹 Bulk Account Name update process completed."
-
-
-AccountID,Name
-123456,UpdatedAccountName1
-789012,UpdatedAccountName2
