@@ -86,7 +86,7 @@ foreach ($Account in $Accounts) {
             "path" = "/name"
             "value" = $NewName
         }
-    ) | ConvertTo-Json -Depth 3 -Compress  # Use compressed JSON format
+    ) | ConvertTo-Json -Depth 3
 
     Write-Log "Updating Name for Account ID: ${AccountID} to '${NewName}'"
     Write-Log "Payload Sent: $jsonBody"
