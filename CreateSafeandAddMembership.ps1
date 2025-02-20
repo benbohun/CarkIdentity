@@ -42,15 +42,26 @@ foreach ($Entry in $SafeData) {
         continue
     }
 
-    $ManagingCPM = $Entry.ManagingCPM
     $Description = $Entry.Description
+    $ManagingCPM = $Entry.ManagingCPM
     $NumberOfVersionsRetention = [int]$Entry.NumberOfVersionsRetention  # Convert to integer
     $NumberOfDaysRetention = [int]$Entry.NumberOfDaysRetention  # Convert to integer
+    $OLACEnabled = if ($Entry.OLACEnabled -eq "true") { $true } else { $false }
+    $AutoPurgeEnabled = if ($Entry.AutoPurgeEnabled -eq "true") { $true } else { $false }
+    $Location = $Entry.Location
+    $UseGen1API = if ($Entry.UseGen1API -eq "true") { $true } else { $false }
 
     Write-Output "Creating Safe: ${SafeName}..."
     try {
-        $NewSafe = Add-PASSafe -SafeName $SafeName -ManagingCPM $ManagingCPM -Description $Description `
-            -NumberOfVersionsRetention $NumberOfVersionsRetention -NumberOfDaysRetention $NumberOfDaysRetention
+        $NewSafe = Add-PASSafe -SafeName $SafeName `
+            -Description $Description `
+            -ManagingCPM $ManagingCPM `
+            -NumberOfVersionsRetention $NumberOfVersionsRetention `
+            -NumberOfDaysRetention $NumberOfDaysRetention `
+            -OLACEnabled $OLACEnabled `
+            -AutoPurgeEnabled $AutoPurgeEnabled `
+            -Location $Location `
+            -UseGen1API $UseGen1API
 
         Write-Output "✅ Successfully created Safe: ${SafeName}."
         $ProcessedSafes[$SafeName] = $true  # Mark Safe as created
