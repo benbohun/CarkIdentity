@@ -46,7 +46,7 @@ foreach ($Entry in $SafeData) {
     if (-not $ExistingSafes.ContainsKey($SafeName)) {
         Write-Log "Checking if Safe: ${SafeName} exists..."
         try {
-            $SafeCheck = Get-PASSafe -SafeName $SafeName -ErrorAction SilentlyContinue
+            $SafeCheck = Get-PASSafe | Where-Object { $_.safeName -eq $SafeName }
             if ($SafeCheck) {
                 Write-Log "✅ Safe: ${SafeName} already exists."
                 $ExistingSafes[$SafeName] = $true
