@@ -11,12 +11,25 @@ Function Write-Log {
     Write-Output $LogEntry
 }
 
-# Step 1: Prompt User for CyberArk Credentials
-Write-Log "Requesting CyberArk PAS authentication..."
-$UPCred = Get-Credential  # Securely prompts for credentials
+# Step 1: Read CSV Data for Authentication & Safe Setup
+$CsvFilePath = "E:\Installation Media\RemovePendingAccount\SafeSetup.csv"  # Update this path as needed
+if (!(Test-Path $CsvFilePath)) {
+    Write-Log "❌ ERROR: Safe setup CSV file not found at: $CsvFilePath"
+    exit
+}
 
-# Get authentication header
-$header = Get-IdentityHeader -IdentityTenantURL "aat4012.id.cyberark.cloud" -psPASFormat -PCloudSubdomain "cna-prod" -UPCreds $UPCred
+$SafeData = Import-Csv -Path $CsvFilePath
+
+# Extract CyberArk Authentication Details from CSV (First Row)
+$TenantURL = "aat4012.id.cyberark.cloud"
+$PCloudSubdomain = "cna-prod"
+$AdminUser = $SafeData[0].MemberName  # Assumes first row has the admin user
+$AdminPassword = ConvertTo-SecureString -String "YourPasswordHere" -AsPlainText -Force  # Replace with a secure password source
+$UPCred = New-Object System.Management.Automation.PSCredential ($AdminUser, $AdminPassword)
+
+# Step 2: Authenticate Using psPAS
+Write-Log "Requesting CyberArk PAS authentication..."
+$header = Get-IdentityHeader -IdentityTenantURL $TenantURL -psPASFormat -PCloudSubdomain $PCloudSubdomain -UPCreds $UPCred
 
 # Register the PAS session
 Use-PASSession $header
@@ -29,15 +42,6 @@ if ($session) {
     Write-Log "❌ Authentication failed. Exiting script."
     exit
 }
-
-# Step 2: Read CSV Data
-$CsvFilePath = "E:\Installation Media\RemovePendingAccount\SafeSetup.csv"  # Update this path as needed
-if (!(Test-Path $CsvFilePath)) {
-    Write-Log "❌ ERROR: Safe setup CSV file not found at: $CsvFilePath"
-    exit
-}
-
-$SafeData = Import-Csv -Path $CsvFilePath
 
 ### **Step 3A: Process Safe Creation FIRST (Avoiding Duplicates)**
 $ProcessedSafes = @{}  # To track already processed Safes
