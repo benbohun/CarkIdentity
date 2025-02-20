@@ -1,8 +1,8 @@
-# Import the psPAS Module
+# Import the psPAS module
 Import-Module psPAS
 
 # Define Log File
-$LogFile = "SafeSetupLog.txt"
+$LogFile = "SafeMemberAdditionLog.txt"
 Function Write-Log {
     Param ([string]$Message)
     $Timestamp = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
@@ -11,93 +11,123 @@ Function Write-Log {
     Write-Output $LogEntry
 }
 
-# Step 1: Authenticate Using psPAS
-Write-Log "Requesting CyberArk PAS authentication..."
-$header = Get-IdentityHeader -IdentityTenantURL "aat4012.id.cyberark.cloud" -psPASFormat -PCloudSubdomain "cna-prod" -UPCreds $UPCred
+# Step 1: Define Required Variables (Prompt only for Client ID & Secret)
+$IdentityTenantID = "aat4012"  # Replace with actual CyberArk Identity tenant ID
+$PCloudSubdomain = "cna-prod"  # Replace with actual CyberArk Privilege Cloud Subdomain
+$ClientID = Read-Host "Enter your CyberArk API Client ID"
+$ClientSecret = Read-Host "Enter your CyberArk API Client Secret" -AsSecureString
+$ClientSecret = [System.Net.NetworkCredential]::new("", $ClientSecret).Password  # Convert SecureString to plain text
 
-# Register the PAS session
-use-PASSession $header
-
-# Validate the session
-$session = Get-PASSession
-if ($session) {
-    Write-Log "✅ Authentication successful, PAS session established."
-} else {
-    Write-Log "❌ Authentication failed. Exiting script."
+# Ensure variables are set correctly
+if ([string]::IsNullOrEmpty($ClientID) -or [string]::IsNullOrEmpty($ClientSecret)) {
+    Write-Log "ERROR: Client ID or Client Secret is missing. Exiting..."
     exit
 }
 
-# Step 2: Read CSV Data
-$CsvFilePath = "E:\Installation Media\RemovePendingAccount\SafeSetup.csv"  # Update this path as needed
-if (!(Test-Path $CsvFilePath)) {
-    Write-Log "❌ ERROR: Safe setup CSV file not found at: $CsvFilePath"
+# Step 2: Request Initial Token
+Write-Log "Requesting initial CyberArk ISPSS token..."
+$TokenURL = "https://$IdentityTenantID.id.cyberark.cloud/oauth2/platformtoken"
+
+$TokenBody = @{
+    grant_type    = "client_credentials"
+    client_id     = $ClientID
+    client_secret = $ClientSecret
+}
+
+$headers = @{
+    "Content-Type" = "application/x-www-form-urlencoded"
+}
+
+try {
+    $TokenResponse = Invoke-RestMethod -Uri $TokenURL -Method Post -Headers $headers -Body $TokenBody
+    $BearerToken = [string]$TokenResponse.access_token  # Ensure token is a string
+
+    # Ensure Token is Valid
+    if ([string]::IsNullOrEmpty($BearerToken) -or $BearerToken.Length -lt 100) {
+        Write-Log "ERROR: Received an invalid token. Length: $($BearerToken.Length)"
+        exit
+    }
+    Write-Log "Authentication successful, token obtained."
+} catch {
+    Write-Log "ERROR: Failed to authenticate with CyberArk ISPSS. $_"
     exit
 }
 
-$SafeData = Import-Csv -Path $CsvFilePath
+# Step 3: Define Headers for API Requests
+$headers = @{
+    "Authorization" = "Bearer $BearerToken"
+    "Content-Type"  = "application/json"
+}
 
-# Step 3: Process Safes and Members
-foreach ($Entry in $SafeData) {
-    $SafeName = $Entry.SafeName
-    $ManagingCPM = $Entry.ManagingCPM
-    $Description = $Entry.Description
-    $NumberOfVersionsRetention = $Entry.NumberOfVersionsRetention
-    $NumberOfDaysRetention = $Entry.NumberOfDaysRetention
-    $EnableAudit = $Entry.EnableAudit -eq "true"
-    $EnableCache = $Entry.EnableCache -eq "true"
+# Step 4: Load CSV File (Hardcoded Path)
+$CsvFilePath = "E:\Installation Media\RemovePendingAccount\addsafe.csv"  # Update this path to your actual CSV file
 
-    # Step 3A: Always attempt to create the Safe
-    Write-Log "Creating Safe: ${SafeName}..."
-    try {
-        $NewSafe = Add-PASSafe -SafeName $SafeName -ManagingCPM $ManagingCPM -Description $Description `
-            -NumberOfVersionsRetention $NumberOfVersionsRetention -NumberOfDaysRetention $NumberOfDaysRetention `
-            -EnableAudit $EnableAudit -EnableCache $EnableCache
+# Check if CSV file exists
+if (-Not (Test-Path $CsvFilePath)) {
+    Write-Log "ERROR: CSV file not found at $CsvFilePath"
+    exit
+}
 
-        Write-Log "✅ Successfully created Safe: ${SafeName} (or it already exists)."
-    } catch {
-        Write-Log "⚠️ WARNING: Safe: ${SafeName} may already exist or encountered an error - $_"
+# Load CSV
+$SafeMembers = Import-Csv -Path $CsvFilePath
+
+# Process each Safe member
+foreach ($Member in $SafeMembers) {
+    $SafeName = $Member.SafeName
+    $MemberName = $Member.Member
+    $MembershipExpirationDate = [int]$Member.MembershipExpirationDate  # Convert to integer
+    $MemberType = $Member.MemberType  # User, Group, or Role
+
+    # Ensure MemberType is valid
+    if ($MemberType -notin @("User", "Group", "Role")) {
+        Write-Log "❌ ERROR: Invalid MemberType '${MemberType}' for ${MemberName} in Safe: ${SafeName}. Skipping..."
+        continue
     }
 
-    # Step 3B: Add or Update Member Permissions
-    $MemberName = $Entry.MemberName
-    $MemberType = $Entry.MemberType
-    $Permissions = @{
-        UseAccounts = $Entry.UseAccounts -eq "true"
-        RetrieveAccounts = $Entry.RetrieveAccounts -eq "true"
-        ListAccounts = $Entry.ListAccounts -eq "true"
-        AddAccounts = $Entry.AddAccounts -eq "true"
-        UpdateAccountContent = $Entry.UpdateAccountContent -eq "true"
-        UpdateAccountProperties = $Entry.UpdateAccountProperties -eq "true"
-        InitiateCPMAccountManagementOperations = $Entry.InitiateCPMAccountManagementOperations -eq "true"
-        SpecifyNextAccountContent = $Entry.SpecifyNextAccountContent -eq "true"
-        RenameAccounts = $Entry.RenameAccounts -eq "true"
-        DeleteAccounts = $Entry.DeleteAccounts -eq "true"
-        UnlockAccounts = $Entry.UnlockAccounts -eq "true"
-        ManageSafe = $Entry.ManageSafe -eq "true"
-        ManageSafeMembers = $Entry.ManageSafeMembers -eq "true"
-        BackupSafe = $Entry.BackupSafe -eq "true"
-        ViewAuditLog = $Entry.ViewAuditLog -eq "true"
-        ViewSafeMembers = $Entry.ViewSafeMembers -eq "true"
-        AccessWithoutConfirmation = $Entry.AccessWithoutConfirmation -eq "true"
-        CreateFolders = $Entry.CreateFolders -eq "true"
-        DeleteFolders = $Entry.DeleteFolders -eq "true"
-        MoveAccountsAndFolders = $Entry.MoveAccountsAndFolders -eq "true"
-        RequestsAuthorizationLevel1 = $Entry.RequestsAuthorizationLevel1 -eq "true"
-        RequestsAuthorizationLevel2 = $Entry.RequestsAuthorizationLevel2 -eq "true"
-    }
+    # Step 5: Construct API URL for Adding Member to Safe
+    $APIEndpoint = "https://$PCloudSubdomain.privilegecloud.cyberark.cloud/PasswordVault/API/Safes/$SafeName/Members/"
 
-    Write-Log "Updating permissions for Member: ${MemberName} in Safe: ${SafeName}..."
-    try {
-        $UpdatedMember = Set-PASSafeMember -SafeName $SafeName -MemberName $MemberName -MemberType $MemberType @Permissions
-
-        if ($UpdatedMember) {
-            Write-Log "✅ Successfully updated ${MemberName}'s permissions in Safe: ${SafeName}."
-        } else {
-            Write-Log "❌ ERROR: Failed to update ${MemberName}'s permissions in Safe: ${SafeName}."
+    # Step 6: Construct JSON Payload from CSV
+    $jsonBody = @{
+        "memberName" = $MemberName
+        "searchIn" = "Vault"
+        "membershipExpirationDate" = $MembershipExpirationDate
+        "permissions" = @{
+            "useAccounts" = [boolean]($Member.UseAccounts -eq "TRUE")
+            "retrieveAccounts" = [boolean]($Member.RetrieveAccounts -eq "TRUE")
+            "listAccounts" = [boolean]($Member.ListAccounts -eq "TRUE")
+            "addAccounts" = [boolean]($Member.AddAccounts -eq "TRUE")
+            "updateAccountContent" = [boolean]($Member.UpdateAccountContent -eq "TRUE")
+            "updateAccountProperties" = [boolean]($Member.UpdateAccountProperties -eq "TRUE")
+            "initiateCPMAccountManagementOperations" = [boolean]($Member.InitiateCPMAccountManagementOperations -eq "TRUE")
+            "specifyNextAccountContent" = [boolean]($Member.SpecifyNextAccountContent -eq "TRUE")
+            "renameAccounts" = [boolean]($Member.RenameAccounts -eq "TRUE")
+            "deleteAccounts" = [boolean]($Member.DeleteAccounts -eq "TRUE")
+            "unlockAccounts" = [boolean]($Member.UnlockAccounts -eq "TRUE")
+            "manageSafe" = [boolean]($Member.ManageSafe -eq "TRUE")
+            "manageSafeMembers" = [boolean]($Member.ManageSafeMembers -eq "TRUE")
+            "backupSafe" = [boolean]($Member.BackupSafe -eq "TRUE")
+            "viewAuditLog" = [boolean]($Member.ViewAuditLog -eq "TRUE")
+            "viewSafeMembers" = [boolean]($Member.ViewSafeMembers -eq "TRUE")
+            "accessWithoutConfirmation" = [boolean]($Member.AccessWithoutConfirmation -eq "TRUE")
+            "createFolders" = [boolean]($Member.CreateFolders -eq "TRUE")
+            "deleteFolders" = [boolean]($Member.DeleteFolders -eq "TRUE")
+            "moveAccountsAndFolders" = [boolean]($Member.MoveAccountsAndFolders -eq "TRUE")
+            "requestsAuthorizationLevel1" = [boolean]($Member.RequestsAuthorizationLevel1 -eq "TRUE")
+            "requestsAuthorizationLevel2" = [boolean]($Member.RequestsAuthorizationLevel2 -eq "TRUE")
         }
+        "MemberType" = $MemberType
+    } | ConvertTo-Json -Depth 3  # Convert to JSON format
+
+    Write-Log "Adding ${MemberType}: ${MemberName} to Safe: ${SafeName}"
+
+    try {
+        # Step 7: Execute API Request using POST method
+        $response = Invoke-RestMethod -Uri $APIEndpoint -Method Post -Headers $headers -Body $jsonBody -ErrorAction Stop
+        Write-Log "✅ Successfully added ${MemberType}: ${MemberName} to ${SafeName}"
     } catch {
-        Write-Log "❌ ERROR: Exception while updating ${MemberName}'s permissions in Safe: ${SafeName} - $_"
+        Write-Log "❌ ERROR: Failed to add ${MemberType}: ${MemberName} to ${SafeName} - $_"
     }
 }
 
-Write-Log "🔹 Safe creation and member permission updates completed."
+Write-Log "🔹 Bulk Safe member addition process completed."
