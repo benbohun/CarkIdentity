@@ -39,7 +39,17 @@ if (!(Test-Path $CsvFilePath)) {
 
 $SafeData = Import-Csv -Path $CsvFilePath
 
-# Step 3: Process Safes and Members
+# Step 3: Pre-fetch existing Safes
+Write-Log "Retrieving existing Safes..."
+try {
+    $ExistingSafes = Get-PASSafe | Select-Object -ExpandProperty SafeName
+    Write-Log "✅ Retrieved $($ExistingSafes.Count) existing Safes."
+} catch {
+    Write-Log "❌ ERROR: Failed to retrieve existing Safes - $_"
+    exit
+}
+
+# Step 4: Process Safes and Members
 foreach ($Entry in $SafeData) {
     $SafeName = $Entry.SafeName
     $ManagingCPM = $Entry.ManagingCPM
@@ -49,19 +59,25 @@ foreach ($Entry in $SafeData) {
     $EnableAudit = $Entry.EnableAudit -eq "true"
     $EnableCache = $Entry.EnableCache -eq "true"
 
-    # Step 3A: Always attempt to create the Safe
-    Write-Log "Creating Safe: ${SafeName}..."
-    try {
-        $NewSafe = Add-PASSafe -SafeName $SafeName -ManagingCPM $ManagingCPM -Description $Description `
-            -NumberOfVersionsRetention $NumberOfVersionsRetention -NumberOfDaysRetention $NumberOfDaysRetention `
-            -EnableAudit $EnableAudit -EnableCache $EnableCache
+    # Step 4A: Create Safe if it doesn't exist
+    if ($SafeName -notin $ExistingSafes) {
+        Write-Log "Creating Safe: ${SafeName}..."
+        try {
+            $NewSafe = Add-PASSafe -SafeName $SafeName -ManagingCPM $ManagingCPM -Description $Description `
+                -NumberOfVersionsRetention $NumberOfVersionsRetention -NumberOfDaysRetention $NumberOfDaysRetention `
+                -EnableAudit $EnableAudit -EnableCache $EnableCache
 
-        Write-Log "✅ Successfully created Safe: ${SafeName} (or it already exists)."
-    } catch {
-        Write-Log "⚠️ WARNING: Safe: ${SafeName} may already exist or encountered an error - $_"
+            Write-Log "✅ Successfully created Safe: ${SafeName}."
+            $ExistingSafes += $SafeName  # Add to existing safe list
+        } catch {
+            Write-Log "⚠️ WARNING: Failed to create Safe: ${SafeName} - $_"
+            continue  # Skip adding members if safe creation failed
+        }
+    } else {
+        Write-Log "✅ Safe already exists: ${SafeName}. Proceeding to set member permissions."
     }
 
-    # Step 3B: Validate Member Type
+    # Step 4B: Validate Member Type
     $MemberName = $Entry.MemberName
     $MemberType = $Entry.MemberType  # User, Group, or Role
     if ($MemberType -notin @("User", "Group", "Role")) {
@@ -69,7 +85,7 @@ foreach ($Entry in $SafeData) {
         continue
     }
 
-    # Step 3C: Prepare Permissions
+    # Step 4C: Prepare Permissions
     $Permissions = @{
         UseAccounts = $Entry.UseAccounts -eq "true"
         RetrieveAccounts = $Entry.RetrieveAccounts -eq "true"
@@ -95,7 +111,7 @@ foreach ($Entry in $SafeData) {
         RequestsAuthorizationLevel2 = $Entry.RequestsAuthorizationLevel2 -eq "true"
     }
 
-    # Step 3D: Set Member Permissions in Safe
+    # Step 4D: Set Member Permissions in Safe
     Write-Log "Setting permissions for ${MemberType}: ${MemberName} in Safe: ${SafeName}..."
     try {
         $UpdatedMember = Set-PASSafeMember -SafeName $SafeName -MemberName $MemberName @Permissions
