@@ -37,49 +37,25 @@ if (!(Test-Path $CsvFilePath)) {
 $SafeData = Import-Csv -Path $CsvFilePath
 
 # Step 3: Process Safes and Members
-$ExistingSafes = @{}
-
 foreach ($Entry in $SafeData) {
     $SafeName = $Entry.SafeName
+    $ManagingCPM = $Entry.ManagingCPM
+    $Description = $Entry.Description
+    $NumberOfVersionsRetention = $Entry.NumberOfVersionsRetention
+    $NumberOfDaysRetention = $Entry.NumberOfDaysRetention
+    $EnableAudit = $Entry.EnableAudit -eq "true"
+    $EnableCache = $Entry.EnableCache -eq "true"
 
-    # Check if the safe already exists (only once per safe)
-    if (-not $ExistingSafes.ContainsKey($SafeName)) {
-        Write-Log "Checking if Safe: ${SafeName} exists..."
-        try {
-            $SafeCheck = Get-PASSafe | Where-Object { $_.safeName -eq $SafeName }
-            if ($SafeCheck) {
-                Write-Log "✅ Safe: ${SafeName} already exists."
-                $ExistingSafes[$SafeName] = $true
-            } else {
-                Write-Log "⚠️ Safe: ${SafeName} does not exist. Creating now..."
-                try {
-                    $ManagingCPM = $Entry.ManagingCPM
-                    $Description = $Entry.Description
-                    $NumberOfVersionsRetention = $Entry.NumberOfVersionsRetention
-                    $NumberOfDaysRetention = $Entry.NumberOfDaysRetention
-                    $EnableAudit = $Entry.EnableAudit -eq "true"
-                    $EnableCache = $Entry.EnableCache -eq "true"
+    # Step 3A: Always attempt to create the Safe
+    Write-Log "Creating Safe: ${SafeName}..."
+    try {
+        $NewSafe = Add-PASSafe -SafeName $SafeName -ManagingCPM $ManagingCPM -Description $Description `
+            -NumberOfVersionsRetention $NumberOfVersionsRetention -NumberOfDaysRetention $NumberOfDaysRetention `
+            -EnableAudit $EnableAudit -EnableCache $EnableCache
 
-                    $NewSafe = Add-PASSafe -SafeName $SafeName -ManagingCPM $ManagingCPM -Description $Description `
-                        -NumberOfVersionsRetention $NumberOfVersionsRetention -NumberOfDaysRetention $NumberOfDaysRetention `
-                        -EnableAudit $EnableAudit -EnableCache $EnableCache
-
-                    if ($NewSafe) {
-                        Write-Log "✅ Successfully created Safe: ${SafeName}."
-                        $ExistingSafes[$SafeName] = $true
-                    } else {
-                        Write-Log "❌ ERROR: Failed to create Safe: ${SafeName}."
-                        continue  # Skip adding members if safe creation failed
-                    }
-                } catch {
-                    Write-Log "❌ ERROR: Exception while creating Safe: ${SafeName} - $_"
-                    continue  # Skip adding members if an error occurred
-                }
-            }
-        } catch {
-            Write-Log "❌ ERROR: Unable to check Safe: ${SafeName} - $_"
-            continue  # Skip adding members if an error occurred
-        }
+        Write-Log "✅ Successfully created Safe: ${SafeName} (or it already exists)."
+    } catch {
+        Write-Log "⚠️ WARNING: Safe: ${SafeName} may already exist or encountered an error - $_"
     }
 
     # Step 3B: Add or Update Member Permissions
