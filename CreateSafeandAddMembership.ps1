@@ -6,7 +6,15 @@ $TenantURL = "aat4012.id.cyberark.cloud"
 $PCloudSubdomain = "cna-prod"
 $CsvFilePath = "E:\Installation Media\RemovePendingAccount\SafeSetup.csv"  # Update this path as needed
 
-# Step 1: Prompt User for CyberArk Credentials
+# Step 1: Read CSV Data
+if (!(Test-Path $CsvFilePath)) {
+    Write-Output "❌ ERROR: Safe setup CSV file not found at: $CsvFilePath"
+    exit
+}
+
+$SafeData = Import-Csv -Path $CsvFilePath
+
+# Step 2: Prompt User for CyberArk Credentials
 Write-Output "Requesting CyberArk PAS authentication..."
 $UPCreds = Get-Credential  # Securely prompts for credentials
 
@@ -22,32 +30,27 @@ if (Get-PASSession) {
     exit
 }
 
-# Step 2: Read CSV Data
-if (!(Test-Path $CsvFilePath)) {
-    Write-Output "❌ ERROR: Safe setup CSV file not found at: $CsvFilePath"
-    exit
-}
-
-$SafeData = Import-Csv -Path $CsvFilePath
-
-### **Step 3A: Process Safe Creation FIRST (Avoiding Duplicates)**
-$ProcessedSafes = @{}  # To track already processed Safes
+### **Step 3A: Create Safes FIRST (Avoiding Duplicates)**
+$ProcessedSafes = @{}  # To track already created Safes
 
 Write-Output "🔹 Starting Safe creation process..."
 foreach ($Entry in $SafeData) {
     $SafeName = $Entry.SafeName
 
-    # Skip duplicate Safes
+    # Skip duplicate Safe creation
     if ($ProcessedSafes.ContainsKey($SafeName)) {
         continue
     }
 
     $ManagingCPM = $Entry.ManagingCPM
     $Description = $Entry.Description
+    $NumberOfVersionsRetention = [int]$Entry.NumberOfVersionsRetention  # Convert to integer
+    $NumberOfDaysRetention = [int]$Entry.NumberOfDaysRetention  # Convert to integer
 
     Write-Output "Creating Safe: ${SafeName}..."
     try {
-        $NewSafe = Add-PASSafe -SafeName $SafeName -ManagingCPM $ManagingCPM -Description $Description
+        $NewSafe = Add-PASSafe -SafeName $SafeName -ManagingCPM $ManagingCPM -Description $Description `
+            -NumberOfVersionsRetention $NumberOfVersionsRetention -NumberOfDaysRetention $NumberOfDaysRetention
 
         Write-Output "✅ Successfully created Safe: ${SafeName}."
         $ProcessedSafes[$SafeName] = $true  # Mark Safe as created
@@ -58,7 +61,7 @@ foreach ($Entry in $SafeData) {
 }
 Write-Output "🔹 Safe creation process completed."
 
-### **Step 3B: Process Safe Members (After All Safes are Created)**
+### **Step 3B: Assign Members AFTER Safes Are Created**
 Write-Output "🔹 Starting Safe member permission updates..."
 foreach ($Entry in $SafeData) {
     $SafeName = $Entry.SafeName
@@ -73,31 +76,31 @@ foreach ($Entry in $SafeData) {
 
     # Prepare Permissions
     $Permissions = @{
-        UseAccounts = $Entry.UseAccounts -eq "true"
-        RetrieveAccounts = $Entry.RetrieveAccounts -eq "true"
-        ListAccounts = $Entry.ListAccounts -eq "true"
-        AddAccounts = $Entry.AddAccounts -eq "true"
-        UpdateAccountContent = $Entry.UpdateAccountContent -eq "true"
-        UpdateAccountProperties = $Entry.UpdateAccountProperties -eq "true"
-        InitiateCPMAccountManagementOperations = $Entry.InitiateCPMAccountManagementOperations -eq "true"
-        SpecifyNextAccountContent = $Entry.SpecifyNextAccountContent -eq "true"
-        RenameAccounts = $Entry.RenameAccounts -eq "true"
-        DeleteAccounts = $Entry.DeleteAccounts -eq "true"
-        UnlockAccounts = $Entry.UnlockAccounts -eq "true"
-        ManageSafe = $Entry.ManageSafe -eq "true"
-        ManageSafeMembers = $Entry.ManageSafeMembers -eq "true"
-        BackupSafe = $Entry.BackupSafe -eq "true"
-        ViewAuditLog = $Entry.ViewAuditLog -eq "true"
-        ViewSafeMembers = $Entry.ViewSafeMembers -eq "true"
-        AccessWithoutConfirmation = $Entry.AccessWithoutConfirmation -eq "true"
-        CreateFolders = $Entry.CreateFolders -eq "true"
-        DeleteFolders = $Entry.DeleteFolders -eq "true"
-        MoveAccountsAndFolders = $Entry.MoveAccountsAndFolders -eq "true"
-        RequestsAuthorizationLevel1 = $Entry.RequestsAuthorizationLevel1 -eq "true"
-        RequestsAuthorizationLevel2 = $Entry.RequestsAuthorizationLevel2 -eq "true"
+        UseAccounts = [bool]($Entry.UseAccounts -eq "true")
+        RetrieveAccounts = [bool]($Entry.RetrieveAccounts -eq "true")
+        ListAccounts = [bool]($Entry.ListAccounts -eq "true")
+        AddAccounts = [bool]($Entry.AddAccounts -eq "true")
+        UpdateAccountContent = [bool]($Entry.UpdateAccountContent -eq "true")
+        UpdateAccountProperties = [bool]($Entry.UpdateAccountProperties -eq "true")
+        InitiateCPMAccountManagementOperations = [bool]($Entry.InitiateCPMAccountManagementOperations -eq "true")
+        SpecifyNextAccountContent = [bool]($Entry.SpecifyNextAccountContent -eq "true")
+        RenameAccounts = [bool]($Entry.RenameAccounts -eq "true")
+        DeleteAccounts = [bool]($Entry.DeleteAccounts -eq "true")
+        UnlockAccounts = [bool]($Entry.UnlockAccounts -eq "true")
+        ManageSafe = [bool]($Entry.ManageSafe -eq "true")
+        ManageSafeMembers = [bool]($Entry.ManageSafeMembers -eq "true")
+        BackupSafe = [bool]($Entry.BackupSafe -eq "true")
+        ViewAuditLog = [bool]($Entry.ViewAuditLog -eq "true")
+        ViewSafeMembers = [bool]($Entry.ViewSafeMembers -eq "true")
+        AccessWithoutConfirmation = [bool]($Entry.AccessWithoutConfirmation -eq "true")
+        CreateFolders = [bool]($Entry.CreateFolders -eq "true")
+        DeleteFolders = [bool]($Entry.DeleteFolders -eq "true")
+        MoveAccountsAndFolders = [bool]($Entry.MoveAccountsAndFolders -eq "true")
+        RequestsAuthorizationLevel1 = [bool]($Entry.RequestsAuthorizationLevel1 -eq "true")
+        RequestsAuthorizationLevel2 = [bool]($Entry.RequestsAuthorizationLevel2 -eq "true")
     }
 
-    # Set Member Permissions in Safe
+    # Assign Permissions to Safe Members
     Write-Output "Setting permissions for ${MemberType}: ${MemberName} in Safe: ${SafeName}..."
     try {
         $UpdatedMember = Set-PASSafeMember -SafeName $SafeName -MemberName $MemberName @Permissions
