@@ -39,38 +39,48 @@ if (!(Test-Path $CsvFilePath)) {
 
 $SafeData = Import-Csv -Path $CsvFilePath
 
-# Step 3: Process Safes and Members
+### **Step 3A: Process Safe Creation FIRST (Avoiding Duplicates)**
+$ProcessedSafes = @{}  # To track already processed Safes
+
+Write-Log "🔹 Starting Safe creation process..."
 foreach ($Entry in $SafeData) {
     $SafeName = $Entry.SafeName
+
+    # Skip duplicate Safes
+    if ($ProcessedSafes.ContainsKey($SafeName)) {
+        continue
+    }
+
     $ManagingCPM = $Entry.ManagingCPM
     $Description = $Entry.Description
-    $NumberOfVersionsRetention = $Entry.NumberOfVersionsRetention
-    $NumberOfDaysRetention = $Entry.NumberOfDaysRetention
-    $EnableAudit = $Entry.EnableAudit -eq "true"
-    $EnableCache = $Entry.EnableCache -eq "true"
 
-    # Step 3A: Always attempt to create the Safe
     Write-Log "Creating Safe: ${SafeName}..."
     try {
-        $NewSafe = Add-PASSafe -SafeName $SafeName -ManagingCPM $ManagingCPM -Description $Description `
-            -NumberOfVersionsRetention $NumberOfVersionsRetention -NumberOfDaysRetention $NumberOfDaysRetention `
-            -EnableAudit $EnableAudit -EnableCache $EnableCache
+        $NewSafe = Add-PASSafe -SafeName $SafeName -ManagingCPM $ManagingCPM -Description $Description
 
-        Write-Log "✅ Successfully created Safe: ${SafeName} (or it already exists)."
+        Write-Log "✅ Successfully created Safe: ${SafeName}."
+        $ProcessedSafes[$SafeName] = $true  # Mark Safe as created
     } catch {
         Write-Log "⚠️ WARNING: Failed to create Safe: ${SafeName} - $_"
         continue  # Skip adding members if safe creation failed
     }
+}
+Write-Log "🔹 Safe creation process completed."
 
-    # Step 3B: Validate Member Type
+### **Step 3B: Process Safe Members (After All Safes are Created)**
+Write-Log "🔹 Starting Safe member permission updates..."
+foreach ($Entry in $SafeData) {
+    $SafeName = $Entry.SafeName
     $MemberName = $Entry.MemberName
     $MemberType = $Entry.MemberType  # User, Group, or Role
+
+    # Validate Member Type
     if ($MemberType -notin @("User", "Group", "Role")) {
         Write-Log "❌ ERROR: Invalid MemberType '${MemberType}' for ${MemberName} in Safe: ${SafeName}. Skipping..."
         continue
     }
 
-    # Step 3C: Prepare Permissions
+    # Prepare Permissions
     $Permissions = @{
         UseAccounts = $Entry.UseAccounts -eq "true"
         RetrieveAccounts = $Entry.RetrieveAccounts -eq "true"
@@ -96,7 +106,7 @@ foreach ($Entry in $SafeData) {
         RequestsAuthorizationLevel2 = $Entry.RequestsAuthorizationLevel2 -eq "true"
     }
 
-    # Step 3D: Set Member Permissions in Safe
+    # Set Member Permissions in Safe
     Write-Log "Setting permissions for ${MemberType}: ${MemberName} in Safe: ${SafeName}..."
     try {
         $UpdatedMember = Set-PASSafeMember -SafeName $SafeName -MemberName $MemberName @Permissions
