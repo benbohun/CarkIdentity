@@ -11,12 +11,15 @@ Function Write-Log {
     Write-Output $LogEntry
 }
 
-# Step 1: Authenticate Using psPAS
+# Step 1: Prompt User for CyberArk Credentials
 Write-Log "Requesting CyberArk PAS authentication..."
+$UPCred = Get-Credential  # Securely prompts for credentials
+
+# Get authentication header
 $header = Get-IdentityHeader -IdentityTenantURL "aat4012.id.cyberark.cloud" -psPASFormat -PCloudSubdomain "cna-prod" -UPCreds $UPCred
 
 # Register the PAS session
-use-PASSession $header
+Use-PASSession $header
 
 # Validate the session
 $session = Get-PASSession
@@ -61,8 +64,6 @@ foreach ($Entry in $SafeData) {
     # Step 3B: Validate Member Type
     $MemberName = $Entry.MemberName
     $MemberType = $Entry.MemberType  # User, Group, or Role
-    $MembershipExpirationDate = $Entry.MembershipExpirationDate
-
     if ($MemberType -notin @("User", "Group", "Role")) {
         Write-Log "❌ ERROR: Invalid MemberType '${MemberType}' for ${MemberName} in Safe: ${SafeName}. Skipping..."
         continue
@@ -94,25 +95,18 @@ foreach ($Entry in $SafeData) {
         RequestsAuthorizationLevel2 = $Entry.RequestsAuthorizationLevel2 -eq "true"
     }
 
-    # Step 3D: Add Member to Safe
-    Write-Log "Adding ${MemberType}: ${MemberName} to Safe: ${SafeName}..."
+    # Step 3D: Set Member Permissions in Safe
+    Write-Log "Setting permissions for ${MemberType}: ${MemberName} in Safe: ${SafeName}..."
     try {
-        $jsonBody = @{
-            "memberName" = $MemberName
-            "searchIn" = "Vault"
-            "membershipExpirationDate" = $MembershipExpirationDate
-            "MemberType" = $MemberType
-            "permissions" = $Permissions
-        } | ConvertTo-Json -Depth 3
+        $UpdatedMember = Set-PASSafeMember -SafeName $SafeName -MemberName $MemberName @Permissions
 
-        # API Endpoint
-        $APIEndpoint = "https://cna-prod.privilegecloud.cyberark.cloud/PasswordVault/API/Safes/$SafeName/Members/"
-
-        # Execute API Request using POST method
-        $response = Invoke-RestMethod -Uri $APIEndpoint -Method Post -Headers $header -Body $jsonBody -ErrorAction Stop
-        Write-Log "✅ Successfully added ${MemberType}: ${MemberName} to ${SafeName}"
+        if ($UpdatedMember) {
+            Write-Log "✅ Successfully updated ${MemberType}: ${MemberName} permissions in Safe: ${SafeName}."
+        } else {
+            Write-Log "❌ ERROR: Failed to update ${MemberType}: ${MemberName} permissions in Safe: ${SafeName}."
+        }
     } catch {
-        Write-Log "❌ ERROR: Failed to add ${MemberType}: ${MemberName} to ${SafeName} - $_"
+        Write-Log "❌ ERROR: Exception while updating ${MemberType}: ${MemberName} permissions in Safe: ${SafeName} - $_"
     }
 }
 
