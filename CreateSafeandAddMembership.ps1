@@ -1,81 +1,133 @@
-# Import the psPAS Module
+# Import the psPAS module
 Import-Module psPAS
 
-# Define parameters
-$TenantURL = "your_tenant_url"
-$PCloudSubdomain = "your_subdomain"
-$SafeCsvFilePath = "C:\Path\To\SafeSetup.csv"  # Update path as needed
+# Define Log File
+$LogFile = "SafeMemberAdditionLog.txt"
+Function Write-Log {
+    Param ([string]$Message)
+    $Timestamp = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
+    $LogEntry = "$Timestamp - $Message"
+    Add-Content -Path $LogFile -Value $LogEntry
+    Write-Output $LogEntry
+}
 
-# Step 1: Read Safe CSV Data
-if (!(Test-Path $SafeCsvFilePath)) {
-    Write-Output "❌ ERROR: Safe setup CSV file not found at: $SafeCsvFilePath"
+# Step 1: Define Required Variables (Prompt only for Client ID & Secret)
+$IdentityTenantID = "aat4012"  # Replace with actual CyberArk Identity tenant ID
+$PCloudSubdomain = "cna-prod"  # Replace with actual CyberArk Privilege Cloud Subdomain
+$ClientID = Read-Host "Enter your CyberArk API Client ID"
+$ClientSecret = Read-Host "Enter your CyberArk API Client Secret" -AsSecureString
+$ClientSecret = [System.Net.NetworkCredential]::new("", $ClientSecret).Password  # Convert SecureString to plain text
+
+# Ensure variables are set correctly
+if ([string]::IsNullOrEmpty($ClientID) -or [string]::IsNullOrEmpty($ClientSecret)) {
+    Write-Log "ERROR: Client ID or Client Secret is missing. Exiting..."
     exit
 }
 
-$SafeData = Import-Csv -Path $SafeCsvFilePath
+# Step 2: Request Initial Token
+Write-Log "Requesting initial CyberArk ISPSS token..."
+$TokenURL = "https://$IdentityTenantID.id.cyberark.cloud/oauth2/platformtoken"
 
-# Step 2: Prompt User for CyberArk Credentials
-Write-Output "Requesting CyberArk PAS authentication..."
-$UPCreds = Get-Credential  # Securely prompts for credentials
+$TokenBody = @{
+    grant_type    = "client_credentials"
+    client_id     = $ClientID
+    client_secret = $ClientSecret
+}
 
-# Authenticate and establish session
-$header = Get-IdentityHeader -IdentityTenantURL $TenantURL -psPASFormat -PCloudSubdomain $PCloudSubdomain -UPCreds $UPCreds
-Use-PASSession $header
+$headers = @{
+    "Content-Type" = "application/x-www-form-urlencoded"
+}
 
-# Verify session
-if (Get-PASSession) {
-    Write-Output "✅ Authentication successful, PAS session established."
-} else {
-    Write-Output "❌ Authentication failed. Exiting script."
+try {
+    $TokenResponse = Invoke-RestMethod -Uri $TokenURL -Method Post -Headers $headers -Body $TokenBody
+    $BearerToken = [string]$TokenResponse.access_token  # Ensure token is a string
+
+    # Ensure Token is Valid
+    if ([string]::IsNullOrEmpty($BearerToken) -or $BearerToken.Length -lt 100) {
+        Write-Log "ERROR: Received an invalid token. Length: $($BearerToken.Length)"
+        exit
+    }
+    Write-Log "Authentication successful, token obtained."
+} catch {
+    Write-Log "ERROR: Failed to authenticate with CyberArk ISPSS. $_"
     exit
 }
 
-# Step 3: Create Safes
-Write-Output "🔹 Starting Safe creation process..."
-foreach ($Entry in $SafeData) {
-    $SafeName = $Entry.SafeName.Trim()
-    if ([string]::IsNullOrEmpty($SafeName)) {
-        Write-Output "⚠️ WARNING: SafeName is missing or empty. Skipping entry."
+# Step 3: Define Headers for API Requests
+$headers = @{
+    "Authorization" = "Bearer $BearerToken"
+    "Content-Type"  = "application/json"
+}
+
+# Step 4: Load CSV File (Hardcoded Path)
+$CsvFilePath = "E:\Installation Media\RemovePendingAccount\addsafe.csv"  # Update this path to your actual CSV file
+
+# Check if CSV file exists
+if (-Not (Test-Path $CsvFilePath)) {
+    Write-Log "ERROR: CSV file not found at $CsvFilePath"
+    exit
+}
+
+# Load CSV
+$SafeMembers = Import-Csv -Path $CsvFilePath
+
+# Process each Safe member
+foreach ($Member in $SafeMembers) {
+    $SafeName = $Member.SafeName
+    $MemberName = $Member.Member
+    $MembershipExpirationDate = [int]$Member.MembershipExpirationDate  # Convert to integer
+    $MemberType = $Member.MemberType  # User, Group, or Role
+
+    # Ensure MemberType is valid
+    if ($MemberType -notin @("User", "Group", "Role")) {
+        Write-Log "❌ ERROR: Invalid MemberType '${MemberType}' for ${MemberName} in Safe: ${SafeName}. Skipping..."
         continue
     }
 
-    # Initialize parameters
-    $params = @{
-        SafeName = $SafeName
-    }
+    # Step 5: Construct API URL for Adding Member to Safe
+    $APIEndpoint = "https://$PCloudSubdomain.privilegecloud.cyberark.cloud/PasswordVault/API/Safes/$SafeName/Members/"
 
-    # Add optional parameters if they have valid values
-    if (-not [string]::IsNullOrEmpty($Entry.Description)) {
-        $params.Description = $Entry.Description.Trim()
-    }
-    if (-not [string]::IsNullOrEmpty($Entry.ManagingCPM)) {
-        $params.ManagingCPM = $Entry.ManagingCPM.Trim()
-    }
-    if ($Entry.NumberOfVersionsRetention -match '^\d+$') {
-        $params.NumberOfVersionsRetention = [math]::Min([int]$Entry.NumberOfVersionsRetention, 999)
-    }
-    if ($Entry.NumberOfDaysRetention -match '^\d+$') {
-        $params.NumberOfDaysRetention = [math]::Min([int]$Entry.NumberOfDaysRetention, 3650)
-    }
-    if ($Entry.OLACEnabled -match '^(?i)true|false$') {
-        $params.OLACEnabled = [System.Convert]::ToBoolean($Entry.OLACEnabled)
-    }
-    if ($Entry.AutoPurgeEnabled -match '^(?i)true|false$') {
-        $params.AutoPurgeEnabled = [System.Convert]::ToBoolean($Entry.AutoPurgeEnabled)
-    }
-    if (-not [string]::IsNullOrEmpty($Entry.Location)) {
-        $params.Location = $Entry.Location.Trim()
-    }
-    if ($Entry.UseGen1API -match '^(?i)true$') {
-        $params.UseGen1API = $true
-    }
+    # Step 6: Construct JSON Payload from CSV
+    $jsonBody = @{
+        "memberName" = $MemberName
+        "searchIn" = "Vault"
+        "membershipExpirationDate" = $MembershipExpirationDate
+        "permissions" = @{
+            "useAccounts" = [boolean]($Member.UseAccounts -eq "TRUE")
+            "retrieveAccounts" = [boolean]($Member.RetrieveAccounts -eq "TRUE")
+            "listAccounts" = [boolean]($Member.ListAccounts -eq "TRUE")
+            "addAccounts" = [boolean]($Member.AddAccounts -eq "TRUE")
+            "updateAccountContent" = [boolean]($Member.UpdateAccountContent -eq "TRUE")
+            "updateAccountProperties" = [boolean]($Member.UpdateAccountProperties -eq "TRUE")
+            "initiateCPMAccountManagementOperations" = [boolean]($Member.InitiateCPMAccountManagementOperations -eq "TRUE")
+            "specifyNextAccountContent" = [boolean]($Member.SpecifyNextAccountContent -eq "TRUE")
+            "renameAccounts" = [boolean]($Member.RenameAccounts -eq "TRUE")
+            "deleteAccounts" = [boolean]($Member.DeleteAccounts -eq "TRUE")
+            "unlockAccounts" = [boolean]($Member.UnlockAccounts -eq "TRUE")
+            "manageSafe" = [boolean]($Member.ManageSafe -eq "TRUE")
+            "manageSafeMembers" = [boolean]($Member.ManageSafeMembers -eq "TRUE")
+            "backupSafe" = [boolean]($Member.BackupSafe -eq "TRUE")
+            "viewAuditLog" = [boolean]($Member.ViewAuditLog -eq "TRUE")
+            "viewSafeMembers" = [boolean]($Member.ViewSafeMembers -eq "TRUE")
+            "accessWithoutConfirmation" = [boolean]($Member.AccessWithoutConfirmation -eq "TRUE")
+            "createFolders" = [boolean]($Member.CreateFolders -eq "TRUE")
+            "deleteFolders" = [boolean]($Member.DeleteFolders -eq "TRUE")
+            "moveAccountsAndFolders" = [boolean]($Member.MoveAccountsAndFolders -eq "TRUE")
+            "requestsAuthorizationLevel1" = [boolean]($Member.RequestsAuthorizationLevel1 -eq "TRUE")
+            "requestsAuthorizationLevel2" = [boolean]($Member.RequestsAuthorizationLevel2 -eq "TRUE")
+        }
+        "MemberType" = $MemberType
+    } | ConvertTo-Json -Depth 3  # Convert to JSON format
 
-    Write-Output "Creating Safe: ${SafeName} with parameters: $params"
+    Write-Log "Adding ${MemberType}: ${MemberName} to Safe: ${SafeName}"
+
     try {
-        Add-PASSafe @params
-        Write-Output "✅ Successfully created Safe: ${SafeName}."
+        # Step 7: Execute API Request using POST method
+        $response = Invoke-RestMethod -Uri $APIEndpoint -Method Post -Headers $headers -Body $jsonBody -ErrorAction Stop
+        Write-Log "✅ Successfully added ${MemberType}: ${MemberName} to ${SafeName}"
     } catch {
-        Write-Output "⚠️ WARNING: Failed to create Safe: ${SafeName} - $_"
+        Write-Log "❌ ERROR: Failed to add ${MemberType}: ${MemberName} to ${SafeName} - $_"
     }
 }
-Write-Output "🔹 Safe creation process completed."
+
+Write-Log "🔹 Bulk Safe member addition process completed."
