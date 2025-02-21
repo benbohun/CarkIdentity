@@ -1,4 +1,9 @@
-SafeName,Description,ManagingCPM,NumberOfVersionsRetention,NumberOfDaysRetention,OLACEnabled,AutoPurgeEnabled,Location,UseGen1API,MemberName,MemberType,UseAccounts,RetrieveAccounts,ListAccounts,AddAccounts,UpdateAccountContent,UpdateAccountProperties,InitiateCPMAccountManagementOperations,SpecifyNextAccountContent,RenameAccounts,DeleteAccounts,UnlockAccounts,ManageSafe,ManageSafeMembers,BackupSafe,ViewAuditLog,ViewSafeMembers,AccessWithoutConfirmation,CreateFolders,DeleteFolders,MoveAccountsAndFolders,RequestsAuthorizationLevel1,RequestsAuthorizationLevel2
-SCRIPTSAFETEST,Safe for automated testing,PasswordManager,5,30,True,False,Root,False,CA_PCloud_Admins@cna.com,Group,True,True,True,True,True,True,True,True,True,True,True,True,True,True,True,True,True,True,True,True,True,True
-SCRIPTSAFETEST,Safe for automated testing,PasswordManager,5,30,True,False,Root,False,cna_pas_admin@cyberark.cloud.6679,User,True,True,True,False,False,False,False,False,False,False,False,False,False,False,False,False,False,False,False,False,False,False
-SCRIPTSAFETEST,Safe for automated testing,PasswordManager,5,30,True,False,Root,False,CAG1896,User,True,True,True,False,False,False,False,False,False,False,False,False,False,False,False,False,False,False,False,False,False,False
+SafeName,Description,ManagingCPM,NumberOfVersionsRetention,NumberOfDaysRetention,OLACEnabled,AutoPurgeEnabled,Location,UseGen1API
+SCRIPTSAFETEST,Safe for automated testing,PasswordManager,5,30,True,False,Root,False
+SCRIPTSAFETEST2,Safe for secondary testing,PasswordManager,5,30,True,False,Root,False
+
+
+SafeName,MemberName,MemberType,UseAccounts,RetrieveAccounts,ListAccounts,AddAccounts,UpdateAccountContent,UpdateAccountProperties,InitiateCPMAccountManagementOperations,SpecifyNextAccountContent,RenameAccounts,DeleteAccounts,UnlockAccounts,ManageSafe,ManageSafeMembers,BackupSafe,ViewAuditLog,ViewSafeMembers,AccessWithoutConfirmation,CreateFolders,DeleteFolders,MoveAccountsAndFolders,RequestsAuthorizationLevel1,RequestsAuthorizationLevel2
+SCRIPTSAFETEST,CA_PCloud_Admins@cna.com,Group,True,True,True,True,True,True,True,True,True,True,True,True,True,True,True,True,True,True,True,True,True,True
+SCRIPTSAFETEST,cna_pas_admin@cyberark.cloud.6679,User,True,True,True,False,False,False,False,False,False,False,False,False,False,False,False,False,False,False,False,False,False,False
+SCRIPTSAFETEST2,CAG1896,User,True,True,True,False,False,False,False,False,False,False,False,False,False,False,False,False,False,False,False,False,False,False
