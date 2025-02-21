@@ -51,27 +51,26 @@ foreach ($Entry in $SafeData) {
     $AutoPurgeEnabled = [System.Convert]::ToBoolean($Entry.AutoPurgeEnabled)
 
     # Convert Location & UseGen1API
-    $Location = $Entry.Location.Trim()
-    $UseGen1API = if ($Entry.UseGen1API -eq "true") { $true } else { $false }
+    $Location = if ($Entry.Location -ne "") { $Entry.Location.Trim() } else { $null }
+    $UseGen1API = [System.Convert]::ToBoolean($Entry.UseGen1API)
 
     Write-Output "Creating Safe: ${SafeName}..."
     try {
-        # Construct parameters dynamically
-        $Parameters = @{
-            SafeName                  = $SafeName
-            ManagingCPM               = $ManagingCPM
-            NumberOfVersionsRetention = $NumberOfVersionsRetention
-            NumberOfDaysRetention     = $NumberOfDaysRetention
-            OLACEnabled               = $OLACEnabled
-            AutoPurgeEnabled          = $AutoPurgeEnabled
+        # Construct parameters with required values
+        if ($UseGen1API) {
+            $NewSafe = Add-PASSafe -SafeName $SafeName -ManagingCPM $ManagingCPM `
+                -NumberOfVersionsRetention $NumberOfVersionsRetention `
+                -NumberOfDaysRetention $NumberOfDaysRetention `
+                -OLACEnabled $OLACEnabled `
+                -AutoPurgeEnabled $AutoPurgeEnabled `
+                -UseGen1API
+        } else {
+            $NewSafe = Add-PASSafe -SafeName $SafeName -ManagingCPM $ManagingCPM `
+                -NumberOfVersionsRetention $NumberOfVersionsRetention `
+                -NumberOfDaysRetention $NumberOfDaysRetention `
+                -OLACEnabled $OLACEnabled `
+                -AutoPurgeEnabled $AutoPurgeEnabled
         }
-
-        if ($Description) { $Parameters["Description"] = $Description }
-        if ($Location) { $Parameters["Location"] = $Location }
-        if ($UseGen1API) { $Parameters["UseGen1API"] = $true }  # SwitchParameter, no need for $false
-
-        # Execute Safe Creation
-        $NewSafe = Add-PASSafe @Parameters
 
         Write-Output "✅ Successfully created Safe: ${SafeName}."
         $ProcessedSafes[$SafeName] = $true  # Mark Safe as created
@@ -109,28 +108,4 @@ foreach ($Entry in $MemberData) {
         "UpdateAccountContent", "UpdateAccountProperties", "InitiateCPMAccountManagementOperations",
         "SpecifyNextAccountContent", "RenameAccounts", "DeleteAccounts", "UnlockAccounts",
         "ManageSafe", "ManageSafeMembers", "BackupSafe", "ViewAuditLog", "ViewSafeMembers",
-        "AccessWithoutConfirmation", "CreateFolders", "DeleteFolders", "MoveAccountsAndFolders",
-        "RequestsAuthorizationLevel1", "RequestsAuthorizationLevel2")
-
-    foreach ($Field in $PermissionFields) {
-        if ($Entry.$Field -match "^(?i)true|false$") {
-            $Permissions[$Field] = [System.Convert]::ToBoolean($Entry.$Field)
-        }
-    }
-
-    # Assign Permissions to Safe Members
-    Write-Output "Setting permissions for ${MemberType}: ${MemberName} in Safe: ${SafeName}..."
-    try {
-        $UpdatedMember = Set-PASSafeMember -SafeName $SafeName -MemberName $MemberName @Permissions
-
-        if ($UpdatedMember) {
-            Write-Output "✅ Successfully updated ${MemberType}: ${MemberName} permissions in Safe: ${SafeName}."
-        } else {
-            Write-Output "❌ ERROR: Failed to update ${MemberType}: ${MemberName} permissions in Safe: ${SafeName}."
-        }
-    } catch {
-        Write-Output "❌ ERROR: Exception while updating ${MemberType}: ${MemberName} permissions in Safe: ${SafeName} - $_"
-    }
-}
-
-Write-Output "🔹 Safe creation and member permission updates completed."
+        "AccessWithoutConfirmation", "CreateFolders", "DeleteFolders", "MoveAccountsA
