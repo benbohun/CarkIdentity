@@ -4,15 +4,16 @@ Import-Module psPAS
 # Define parameters
 $TenantURL = "aat4012.id.cyberark.cloud"
 $PCloudSubdomain = "cna-prod"
-$CsvFilePath = "E:\Installation Media\RemovePendingAccount\SafeSetup.csv"  # Update this path as needed
+$SafeCsvFilePath = "E:\Installation Media\RemovePendingAccount\SafeSetup.csv"  # Update this path as needed
+$MemberCsvFilePath = "E:\Installation Media\RemovePendingAccount\SafeMembers.csv"  # Update this path as needed
 
-# Step 1: Read CSV Data
-if (!(Test-Path $CsvFilePath)) {
-    Write-Output "❌ ERROR: Safe setup CSV file not found at: $CsvFilePath"
+# Step 1: Read Safe CSV Data
+if (!(Test-Path $SafeCsvFilePath)) {
+    Write-Output "❌ ERROR: Safe setup CSV file not found at: $SafeCsvFilePath"
     exit
 }
 
-$SafeData = Import-Csv -Path $CsvFilePath
+$SafeData = Import-Csv -Path $SafeCsvFilePath
 
 # Step 2: Prompt User for CyberArk Credentials
 Write-Output "Requesting CyberArk PAS authentication..."
@@ -73,8 +74,16 @@ foreach ($Entry in $SafeData) {
 Write-Output "🔹 Safe creation process completed."
 
 ### **Step 3B: Assign Members AFTER Safes Are Created**
+# Step 4: Read Safe Members CSV Data
+if (!(Test-Path $MemberCsvFilePath)) {
+    Write-Output "❌ ERROR: Safe members CSV file not found at: $MemberCsvFilePath"
+    exit
+}
+
+$MemberData = Import-Csv -Path $MemberCsvFilePath
+
 Write-Output "🔹 Starting Safe member permission updates..."
-foreach ($Entry in $SafeData) {
+foreach ($Entry in $MemberData) {
     $SafeName = $Entry.SafeName
     $MemberName = $Entry.MemberName
     $MemberType = $Entry.MemberType  # User, Group, or Role
