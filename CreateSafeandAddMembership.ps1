@@ -1,4 +1,4 @@
-# Import the psPAS module
+# Import the psPAS Module
 Import-Module psPAS
 
 # Define Log File
@@ -59,8 +59,8 @@ $headers = @{
     "Content-Type"  = "application/json"
 }
 
-# Step 4: Load CSV File (Hardcoded Path)
-$CsvFilePath = "E:\Installation Media\RemovePendingAccount\addsafe.csv"  # Update this path to your actual CSV file
+# Step 4: Load CSV File
+$CsvFilePath = "E:\Installation Media\RemovePendingAccount\addsafe.csv"  # Update this path
 
 # Check if CSV file exists
 if (-Not (Test-Path $CsvFilePath)) {
@@ -83,27 +83,31 @@ foreach ($Safe in $SafeData) {
         continue
     }
 
-    # Convert Boolean & Integer Values
+    # Convert Boolean Values
     $OLACEnabled = [System.Convert]::ToBoolean($Safe.OLACEnabled)
     $AutoPurgeEnabled = [System.Convert]::ToBoolean($Safe.AutoPurgeEnabled)
-    $NumberOfVersionsRetention = [math]::Min([int]$Safe.NumberOfVersionsRetention, 999)
-    $NumberOfDaysRetention = [math]::Min([int]$Safe.NumberOfDaysRetention, 3650)
+
+    # Determine which retention value to use
+    $RetentionParameter = @{}
+    if ($Safe.NumberOfDaysRetention -match '^\d+$') {
+        $RetentionParameter["numberOfDaysRetention"] = [math]::Min([int]$Safe.NumberOfDaysRetention, 3650)
+    } elseif ($Safe.NumberOfVersionsRetention -match '^\d+$') {
+        $RetentionParameter["numberOfVersionsRetention"] = [math]::Min([int]$Safe.NumberOfVersionsRetention, 999)
+    }
 
     # Construct API Endpoint
     $APIEndpoint = "https://$PCloudSubdomain.privilegecloud.cyberark.cloud/PasswordVault/API/Safes/"
 
-    # Construct JSON Payload
+    # Construct JSON Payload (Avoid passing both retention parameters)
     $SafePayload = @{
         "safeName" = $SafeName
         "description" = $Description
         "olacEnabled" = $OLACEnabled
         "managingCPM" = $ManagingCPM
-        "numberOfVersionsRetention" = $NumberOfVersionsRetention
-        "numberOfDaysRetention" = $NumberOfDaysRetention
         "autoPurgeEnabled" = $AutoPurgeEnabled
-    } | ConvertTo-Json -Depth 3
+    } + $RetentionParameter | ConvertTo-Json -Depth 3
 
-    Write-Log "Creating Safe: ${SafeName}..."
+    Write-Log "Creating Safe: ${SafeName} with payload: $SafePayload"
 
     try {
         $Response = Invoke-RestMethod -Uri $APIEndpoint -Method Post -Headers $headers -Body $SafePayload -ErrorAction Stop
