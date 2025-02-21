@@ -39,47 +39,96 @@ foreach ($Entry in $SafeData) {
     $SafeName = $Entry.SafeName.Trim()
     if ($ProcessedSafes.ContainsKey($SafeName)) { continue }
 
-    $Description = if ($Entry.Description -ne "") { $Entry.Description.Trim() } else { $null }
     $ManagingCPM = $Entry.ManagingCPM.Trim()
+    $Description = if ($Entry.Description -ne "") { $Entry.Description.Trim() } else { $null }
 
-    # Validate and limit integer parameters
-    $NumberOfVersionsRetention = [math]::Min([int]$Entry.NumberOfVersionsRetention, 999)  # Max 999
-    $NumberOfDaysRetention = [math]::Min([int]$Entry.NumberOfDaysRetention, 3650)  # Max 3650
+    # Ensure integers are within valid range
+    $NumberOfVersionsRetention = [math]::Min([int]$Entry.NumberOfVersionsRetention, 999)
+    $NumberOfDaysRetention = [math]::Min([int]$Entry.NumberOfDaysRetention, 3650)
 
-    # Convert Boolean parameters
+    # Convert Boolean values properly
     $OLACEnabled = [System.Convert]::ToBoolean($Entry.OLACEnabled)
     $AutoPurgeEnabled = [System.Convert]::ToBoolean($Entry.AutoPurgeEnabled)
 
-    # Handle Location and UseGen1API correctly
+    # Handle optional parameters correctly
     $Location = if ($Entry.Location -ne "") { $Entry.Location.Trim() } else { $null }
-    $UseGen1API = [System.Convert]::ToBoolean($Entry.UseGen1API)
+    $UseGen1API = if ($Entry.UseGen1API -eq "true") { $true } else { $false }
 
     Write-Output "Creating Safe: ${SafeName}..."
 
     try {
-        # Construct required parameters
-        $Parameters = @{
-            SafeName                  = $SafeName
-            ManagingCPM               = $ManagingCPM
-            NumberOfVersionsRetention = $NumberOfVersionsRetention
-            NumberOfDaysRetention     = $NumberOfDaysRetention
-            OLACEnabled               = $OLACEnabled
-            AutoPurgeEnabled          = $AutoPurgeEnabled
+        # Explicitly passing only required parameters
+        if ($UseGen1API) {
+            Add-PASSafe -SafeName $SafeName -ManagingCPM $ManagingCPM `
+                -NumberOfVersionsRetention $NumberOfVersionsRetention `
+                -NumberOfDaysRetention $NumberOfDaysRetention `
+                -OLACEnabled $OLACEnabled `
+                -AutoPurgeEnabled $AutoPurgeEnabled `
+                -UseGen1API
+        } else {
+            Add-PASSafe -SafeName $SafeName -ManagingCPM $ManagingCPM `
+                -NumberOfVersionsRetention $NumberOfVersionsRetention `
+                -NumberOfDaysRetention $NumberOfDaysRetention `
+                -OLACEnabled $OLACEnabled `
+                -AutoPurgeEnabled $AutoPurgeEnabled
         }
 
-        # Add optional parameters only if they have values
-        if ($Description) { $Parameters["Description"] = $Description }
-        if ($Location) { $Parameters["Location"] = $Location }
-        if ($UseGen1API) { $Parameters["UseGen1API"] = $true }  # Only add if true
-
-        # Execute Safe Creation
-        $NewSafe = Add-PASSafe @Parameters
-
         Write-Output "✅ Successfully created Safe: ${SafeName}."
-        $ProcessedSafes[$SafeName] = $true  # Mark Safe as created
+        $ProcessedSafes[$SafeName] = $true
     } catch {
         Write-Output "⚠️ WARNING: Failed to create Safe: ${SafeName} - $_"
-        continue  # Skip adding members if safe creation failed
+        continue
     }
 }
 Write-Output "🔹 Safe creation process completed."
+
+### **Step 3B: Assign Members AFTER Safes Are Created**
+# Step 4: Read Safe Members CSV Data
+if (!(Test-Path $MemberCsvFilePath)) {
+    Write-Output "❌ ERROR: Safe members CSV file not found at: $MemberCsvFilePath"
+    exit
+}
+
+$MemberData = Import-Csv -Path $MemberCsvFilePath
+
+Write-Output "🔹 Starting Safe member permission updates..."
+foreach ($Entry in $MemberData) {
+    $SafeName = $Entry.SafeName.Trim()
+    $MemberName = $Entry.MemberName.Trim()
+    $MemberType = $Entry.MemberType.Trim()  # User, Group, or Role
+
+    # Validate Member Type
+    if ($MemberType -notin @("User", "Group", "Role")) {
+        Write-Output "❌ ERROR: Invalid MemberType '${MemberType}' for ${MemberName} in Safe: ${SafeName}. Skipping..."
+        continue
+    }
+
+    # Prepare Permissions
+    $Permissions = @{}
+    $PermissionFields = @(
+        "UseAccounts", "RetrieveAccounts", "ListAccounts", "AddAccounts",
+        "UpdateAccountContent", "UpdateAccountProperties", "InitiateCPMAccountManagementOperations",
+        "SpecifyNextAccountContent", "RenameAccounts", "DeleteAccounts", "UnlockAccounts",
+        "ManageSafe", "ManageSafeMembers", "BackupSafe", "ViewAuditLog", "ViewSafeMembers",
+        "AccessWithoutConfirmation", "CreateFolders", "DeleteFolders", "MoveAccountsAndFolders",
+        "RequestsAuthorizationLevel1", "RequestsAuthorizationLevel2"
+    )
+
+    foreach ($Field in $PermissionFields) {
+        if ($Entry.$Field -match "^(?i)true|false$") {
+            $Permissions[$Field] = [System.Convert]::ToBoolean($Entry.$Field)
+        }
+    }
+
+    # Assign Permissions to Safe Members
+    Write-Output "Setting permissions for ${MemberType}: ${MemberName} in Safe: ${SafeName}..."
+    try {
+        Set-PASSafeMember -SafeName $SafeName -MemberName $MemberName @Permissions
+
+        Write-Output "✅ Successfully updated ${MemberType}: ${MemberName} permissions in Safe: ${SafeName}."
+    } catch {
+        Write-Output "❌ ERROR: Exception while updating ${MemberType}: ${MemberName} permissions in Safe: ${SafeName} - $_"
+    }
+}
+
+Write-Output "🔹 Safe creation and member permission updates completed."
