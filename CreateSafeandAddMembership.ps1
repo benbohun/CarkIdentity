@@ -108,4 +108,28 @@ foreach ($Entry in $MemberData) {
         "UpdateAccountContent", "UpdateAccountProperties", "InitiateCPMAccountManagementOperations",
         "SpecifyNextAccountContent", "RenameAccounts", "DeleteAccounts", "UnlockAccounts",
         "ManageSafe", "ManageSafeMembers", "BackupSafe", "ViewAuditLog", "ViewSafeMembers",
-        "AccessWithoutConfirmation", "CreateFolders", "DeleteFolders", "MoveAccountsA
+        "AccessWithoutConfirmation", "CreateFolders", "DeleteFolders", "MoveAccountsAndFolders",
+        "RequestsAuthorizationLevel1", "RequestsAuthorizationLevel2")
+
+    foreach ($Field in $PermissionFields) {
+        if ($Entry.$Field -match "^(?i)true|false$") {
+            $Permissions[$Field] = [System.Convert]::ToBoolean($Entry.$Field)
+        }
+    }
+
+    # Assign Permissions to Safe Members
+    Write-Output "Setting permissions for ${MemberType}: ${MemberName} in Safe: ${SafeName}..."
+    try {
+        $UpdatedMember = Set-PASSafeMember -SafeName $SafeName -MemberName $MemberName @Permissions
+
+        if ($UpdatedMember) {
+            Write-Output "✅ Successfully updated ${MemberType}: ${MemberName} permissions in Safe: ${SafeName}."
+        } else {
+            Write-Output "❌ ERROR: Failed to update ${MemberType}: ${MemberName} permissions in Safe: ${SafeName}."
+        }
+    } catch {
+        Write-Output "❌ ERROR: Exception while updating ${MemberType}: ${MemberName} permissions in Safe: ${SafeName} - $_"
+    }
+}
+
+Write-Output "🔹 Safe creation and member permission updates completed."
