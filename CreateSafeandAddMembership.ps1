@@ -4,8 +4,8 @@ Import-Module psPAS
 # Define parameters
 $TenantURL = "aat4012.id.cyberark.cloud"
 $PCloudSubdomain = "cna-prod"
-$SafeCsvFilePath = "E:\Installation Media\RemovePendingAccount\SafeSetup.csv"  # Update this path as needed
-$MemberCsvFilePath = "E:\Installation Media\RemovePendingAccount\SafeMembers.csv"  # Update this path as needed
+$SafeCsvFilePath = "E:\Installation Media\RemovePendingAccount\SafeSetup.csv"  # Update path as needed
+$MemberCsvFilePath = "E:\Installation Media\RemovePendingAccount\SafeMembers.csv"  # Update path as needed
 
 # Step 1: Read Safe CSV Data
 if (!(Test-Path $SafeCsvFilePath)) {
@@ -32,37 +32,46 @@ if (Get-PASSession) {
 }
 
 ### **Step 3A: Create Safes FIRST (Avoiding Duplicates)**
-$ProcessedSafes = @{}  # To track already created Safes
+$ProcessedSafes = @{}  # Track created safes
 
 Write-Output "🔹 Starting Safe creation process..."
 foreach ($Entry in $SafeData) {
-    $SafeName = $Entry.SafeName
+    $SafeName = $Entry.SafeName.Trim()
+    if ($ProcessedSafes.ContainsKey($SafeName)) { continue }
 
-    # Skip duplicate Safe creation
-    if ($ProcessedSafes.ContainsKey($SafeName)) {
-        continue
-    }
+    $Description = $Entry.Description.Trim()
+    $ManagingCPM = $Entry.ManagingCPM.Trim()
 
-    $Description = $Entry.Description
-    $ManagingCPM = $Entry.ManagingCPM
-    $NumberOfVersionsRetention = [int]$Entry.NumberOfVersionsRetention  # Convert to integer
-    $NumberOfDaysRetention = [int]$Entry.NumberOfDaysRetention  # Convert to integer
-    $OLACEnabled = if ($Entry.OLACEnabled -eq "true") { $true } else { $false }
-    $AutoPurgeEnabled = if ($Entry.AutoPurgeEnabled -eq "true") { $true } else { $false }
-    $Location = $Entry.Location
+    # Validate and limit integer parameters
+    $NumberOfVersionsRetention = [math]::Min([int]$Entry.NumberOfVersionsRetention, 999)  # Max 999
+    $NumberOfDaysRetention = [math]::Min([int]$Entry.NumberOfDaysRetention, 3650)  # Max 3650
+
+    # Convert Boolean parameters
+    $OLACEnabled = [System.Convert]::ToBoolean($Entry.OLACEnabled)
+    $AutoPurgeEnabled = [System.Convert]::ToBoolean($Entry.AutoPurgeEnabled)
+
+    # Convert Location & UseGen1API
+    $Location = $Entry.Location.Trim()
     $UseGen1API = if ($Entry.UseGen1API -eq "true") { $true } else { $false }
 
     Write-Output "Creating Safe: ${SafeName}..."
     try {
-        $NewSafe = Add-PASSafe -SafeName $SafeName `
-            -Description $Description `
-            -ManagingCPM $ManagingCPM `
-            -NumberOfVersionsRetention $NumberOfVersionsRetention `
-            -NumberOfDaysRetention $NumberOfDaysRetention `
-            -OLACEnabled $OLACEnabled `
-            -AutoPurgeEnabled $AutoPurgeEnabled `
-            -Location $Location `
-            -UseGen1API $UseGen1API
+        # Construct parameters dynamically
+        $Parameters = @{
+            SafeName                  = $SafeName
+            ManagingCPM               = $ManagingCPM
+            NumberOfVersionsRetention = $NumberOfVersionsRetention
+            NumberOfDaysRetention     = $NumberOfDaysRetention
+            OLACEnabled               = $OLACEnabled
+            AutoPurgeEnabled          = $AutoPurgeEnabled
+        }
+
+        if ($Description) { $Parameters["Description"] = $Description }
+        if ($Location) { $Parameters["Location"] = $Location }
+        if ($UseGen1API) { $Parameters["UseGen1API"] = $true }  # SwitchParameter, no need for $false
+
+        # Execute Safe Creation
+        $NewSafe = Add-PASSafe @Parameters
 
         Write-Output "✅ Successfully created Safe: ${SafeName}."
         $ProcessedSafes[$SafeName] = $true  # Mark Safe as created
@@ -84,9 +93,9 @@ $MemberData = Import-Csv -Path $MemberCsvFilePath
 
 Write-Output "🔹 Starting Safe member permission updates..."
 foreach ($Entry in $MemberData) {
-    $SafeName = $Entry.SafeName
-    $MemberName = $Entry.MemberName
-    $MemberType = $Entry.MemberType  # User, Group, or Role
+    $SafeName = $Entry.SafeName.Trim()
+    $MemberName = $Entry.MemberName.Trim()
+    $MemberType = $Entry.MemberType.Trim()  # User, Group, or Role
 
     # Validate Member Type
     if ($MemberType -notin @("User", "Group", "Role")) {
@@ -95,29 +104,18 @@ foreach ($Entry in $MemberData) {
     }
 
     # Prepare Permissions
-    $Permissions = @{
-        UseAccounts = [bool]($Entry.UseAccounts -eq "true")
-        RetrieveAccounts = [bool]($Entry.RetrieveAccounts -eq "true")
-        ListAccounts = [bool]($Entry.ListAccounts -eq "true")
-        AddAccounts = [bool]($Entry.AddAccounts -eq "true")
-        UpdateAccountContent = [bool]($Entry.UpdateAccountContent -eq "true")
-        UpdateAccountProperties = [bool]($Entry.UpdateAccountProperties -eq "true")
-        InitiateCPMAccountManagementOperations = [bool]($Entry.InitiateCPMAccountManagementOperations -eq "true")
-        SpecifyNextAccountContent = [bool]($Entry.SpecifyNextAccountContent -eq "true")
-        RenameAccounts = [bool]($Entry.RenameAccounts -eq "true")
-        DeleteAccounts = [bool]($Entry.DeleteAccounts -eq "true")
-        UnlockAccounts = [bool]($Entry.UnlockAccounts -eq "true")
-        ManageSafe = [bool]($Entry.ManageSafe -eq "true")
-        ManageSafeMembers = [bool]($Entry.ManageSafeMembers -eq "true")
-        BackupSafe = [bool]($Entry.BackupSafe -eq "true")
-        ViewAuditLog = [bool]($Entry.ViewAuditLog -eq "true")
-        ViewSafeMembers = [bool]($Entry.ViewSafeMembers -eq "true")
-        AccessWithoutConfirmation = [bool]($Entry.AccessWithoutConfirmation -eq "true")
-        CreateFolders = [bool]($Entry.CreateFolders -eq "true")
-        DeleteFolders = [bool]($Entry.DeleteFolders -eq "true")
-        MoveAccountsAndFolders = [bool]($Entry.MoveAccountsAndFolders -eq "true")
-        RequestsAuthorizationLevel1 = [bool]($Entry.RequestsAuthorizationLevel1 -eq "true")
-        RequestsAuthorizationLevel2 = [bool]($Entry.RequestsAuthorizationLevel2 -eq "true")
+    $Permissions = @{}
+    $PermissionFields = @("UseAccounts", "RetrieveAccounts", "ListAccounts", "AddAccounts",
+        "UpdateAccountContent", "UpdateAccountProperties", "InitiateCPMAccountManagementOperations",
+        "SpecifyNextAccountContent", "RenameAccounts", "DeleteAccounts", "UnlockAccounts",
+        "ManageSafe", "ManageSafeMembers", "BackupSafe", "ViewAuditLog", "ViewSafeMembers",
+        "AccessWithoutConfirmation", "CreateFolders", "DeleteFolders", "MoveAccountsAndFolders",
+        "RequestsAuthorizationLevel1", "RequestsAuthorizationLevel2")
+
+    foreach ($Field in $PermissionFields) {
+        if ($Entry.$Field -match "^(?i)true|false$") {
+            $Permissions[$Field] = [System.Convert]::ToBoolean($Entry.$Field)
+        }
     }
 
     # Assign Permissions to Safe Members
