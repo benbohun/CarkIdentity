@@ -11,7 +11,22 @@ Function Write-Log {
     Write-Output $LogEntry
 }
 
-# Step 1: Define Required Variables (Prompt only for Client ID & Secret)
+# Step 1: Define Required Variables (Prompt for Safe Name & Description)
+$SafeName = Read-Host "Enter the Safe Name"
+$Description = Read-Host "Enter the Safe Description"
+
+# Ensure values are provided
+if ([string]::IsNullOrEmpty($SafeName)) {
+    Write-Log "❌ ERROR: Safe Name cannot be empty. Exiting..."
+    exit
+}
+
+if ([string]::IsNullOrEmpty($Description)) {
+    Write-Log "❌ ERROR: Safe Description cannot be empty. Exiting..."
+    exit
+}
+
+# Step 2: Define CyberArk Authentication Variables
 $IdentityTenantID = "aat4012"  # Replace with actual CyberArk Identity tenant ID
 $PCloudSubdomain = "cna-prod"  # Replace with actual CyberArk Privilege Cloud Subdomain
 $ClientID = Read-Host "Enter your CyberArk API Client ID"
@@ -24,7 +39,7 @@ if ([string]::IsNullOrEmpty($ClientID) -or [string]::IsNullOrEmpty($ClientSecret
     exit
 }
 
-# Step 2: Request Initial Token
+# Step 3: Request Initial Token
 Write-Log "Requesting initial CyberArk ISPSS token..."
 $TokenURL = "https://$IdentityTenantID.id.cyberark.cloud/oauth2/platformtoken"
 
@@ -53,68 +68,35 @@ try {
     exit
 }
 
-# Step 3: Define Headers for API Requests
+# Step 4: Define Headers for API Requests
 $headers = @{
     "Authorization" = "Bearer $BearerToken"
     "Content-Type"  = "application/json"
 }
 
-# Step 4: Load CSV File
-$CsvFilePath = "E:\Installation Media\RemovePendingAccount\addsafe.csv"  # Update this path
+# Step 5: Create Safe Using API
+Write-Log "🔹 Creating Safe: ${SafeName}..."
 
-# Check if CSV file exists
-if (-Not (Test-Path $CsvFilePath)) {
-    Write-Log "ERROR: CSV file not found at $CsvFilePath"
-    exit
-}
+# Construct API Endpoint
+$APIEndpoint = "https://$PCloudSubdomain.privilegecloud.cyberark.cloud/PasswordVault/API/Safes/"
 
-# Load CSV
-$SafeData = Import-Csv -Path $CsvFilePath
+# Construct JSON Payload (Defaults Applied)
+$SafePayload = @{
+    "safeName"                  = $SafeName
+    "description"               = $Description
+    "olacEnabled"               = $false  # Default value
+    "autoPurgeEnabled"          = $false  # Default value
+    "managingCPM"               = "CNA_PASS_MANG"  # Default CPM
+    "numberOfVersionsRetention" = 7  # Default retention policy
+} | ConvertTo-Json -Depth 3
 
-# Step 5: Create Safes Using API
-foreach ($Safe in $SafeData) {
-    $SafeName = $Safe.SafeName.Trim()
-    $ManagingCPM = $Safe.ManagingCPM.Trim()
-    $Description = $Safe.Description.Trim()
-    
-    # Ensure required parameters are present
-    if ([string]::IsNullOrEmpty($SafeName) -or [string]::IsNullOrEmpty($ManagingCPM)) {
-        Write-Log "❌ ERROR: SafeName or ManagingCPM missing for an entry. Skipping..."
-        continue
-    }
+Write-Log "Creating Safe: ${SafeName} with payload: $SafePayload"
 
-    # Convert Boolean Values
-    $OLACEnabled = [System.Convert]::ToBoolean($Safe.OLACEnabled)
-    $AutoPurgeEnabled = [System.Convert]::ToBoolean($Safe.AutoPurgeEnabled)
-
-    # Determine which retention value to use
-    $RetentionParameter = @{}
-    if ($Safe.NumberOfDaysRetention -match '^\d+$') {
-        $RetentionParameter["numberOfDaysRetention"] = [math]::Min([int]$Safe.NumberOfDaysRetention, 3650)
-    } elseif ($Safe.NumberOfVersionsRetention -match '^\d+$') {
-        $RetentionParameter["numberOfVersionsRetention"] = [math]::Min([int]$Safe.NumberOfVersionsRetention, 999)
-    }
-
-    # Construct API Endpoint
-    $APIEndpoint = "https://$PCloudSubdomain.privilegecloud.cyberark.cloud/PasswordVault/API/Safes/"
-
-    # Construct JSON Payload (Avoid passing both retention parameters)
-    $SafePayload = @{
-        "safeName" = $SafeName
-        "description" = $Description
-        "olacEnabled" = $OLACEnabled
-        "managingCPM" = $ManagingCPM
-        "autoPurgeEnabled" = $AutoPurgeEnabled
-    } + $RetentionParameter | ConvertTo-Json -Depth 3
-
-    Write-Log "Creating Safe: ${SafeName} with payload: $SafePayload"
-
-    try {
-        $Response = Invoke-RestMethod -Uri $APIEndpoint -Method Post -Headers $headers -Body $SafePayload -ErrorAction Stop
-        Write-Log "✅ Successfully created Safe: ${SafeName}."
-    } catch {
-        Write-Log "❌ ERROR: Failed to create Safe: ${SafeName} - $_"
-    }
+try {
+    $Response = Invoke-RestMethod -Uri $APIEndpoint -Method Post -Headers $headers -Body $SafePayload -ErrorAction Stop
+    Write-Log "✅ Successfully created Safe: ${SafeName}."
+} catch {
+    Write-Log "❌ ERROR: Failed to create Safe: ${SafeName} - $_"
 }
 
 Write-Log "🔹 Safe creation process completed."
