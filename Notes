@@ -1,3 +1,4 @@
-SafeName,Description,ManagingCPM,NumberOfVersionsRetention,NumberOfDaysRetention,OLACEnabled,AutoPurgeEnabled
-SCRIPTSAFETEST,Safe for automated testing,PasswordManager,5,30,True,False
-SCRIPTSAFETEST2,Safe for secondary testing,PasswordManager,10,365,False,True
+SafeName,Member,MemberType,MembershipExpirationDate,UseAccounts,RetrieveAccounts,ListAccounts,AddAccounts,UpdateAccountContent,UpdateAccountProperties,InitiateCPMAccountManagementOperations,SpecifyNextAccountContent,RenameAccounts,DeleteAccounts,UnlockAccounts,ManageSafe,ManageSafeMembers,BackupSafe,ViewAuditLog,ViewSafeMembers,AccessWithoutConfirmation,CreateFolders,DeleteFolders,MoveAccountsAndFolders,RequestsAuthorizationLevel1,RequestsAuthorizationLevel2
+SCRIPTSAFETEST,CA_PCloud_Admins@cna.com,Group,,TRUE,TRUE,TRUE,TRUE,TRUE,TRUE,TRUE,TRUE,TRUE,TRUE,TRUE,TRUE,TRUE,TRUE,TRUE,TRUE,TRUE,TRUE,TRUE,TRUE,TRUE,FALSE
+SCRIPTSAFETEST,cna_pas_admin@cyberark.cloud.6679,User,,TRUE,TRUE,TRUE,TRUE,TRUE,TRUE,TRUE,TRUE,TRUE,TRUE,TRUE,TRUE,TRUE,TRUE,TRUE,TRUE,TRUE,TRUE,TRUE,TRUE,TRUE,FALSE
+SCRIPTSAFETEST,safe_automation@cyberark.cloud.6679,User,,TRUE,TRUE,TRUE,TRUE,TRUE,TRUE,TRUE,TRUE,TRUE,TRUE,TRUE,TRUE,TRUE,TRUE,TRUE,TRUE,TRUE,TRUE,TRUE,TRUE,TRUE,FALSE
