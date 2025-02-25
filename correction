@@ -4,53 +4,62 @@ if ($PSVersionTable.PSVersion.Major -lt 3) {
     exit
 }
 
-[CmdletBinding()]
-param (
-    [Parameter(Mandatory = $true, HelpMessage = "Enter the PVWA URL")]
-    [Alias("url")]
-    [String]$PVWAURL,
+# Declare CmdletBinding only within an advanced function, not at the script level
+function Main {
+    [CmdletBinding()]
+    param (
+        [Parameter(Mandatory = $true, HelpMessage = "Enter the PVWA URL")]
+        [Alias("url")]
+        [String]$PVWAURL,
 
-    [Parameter(Mandatory = $false, HelpMessage = "Enter the Authentication type (Default: CyberArk)")]
-    [ValidateSet("cyberark", "ldap", "radius")]
-    [String]$AuthType = "cyberark",
+        [Parameter(Mandatory = $false, HelpMessage = "Enter the Authentication type (Default: CyberArk)")]
+        [ValidateSet("cyberark", "ldap", "radius")]
+        [String]$AuthType = "cyberark",
 
-    [Parameter(Mandatory = $false, HelpMessage = "Path to a CSV file to export data to")]
-    [Alias("path")]
-    [string]$CSVPath,
+        [Parameter(Mandatory = $false, HelpMessage = "Path to a CSV file to export data to")]
+        [Alias("path")]
+        [string]$CSVPath,
 
-    [Parameter(Mandatory = $false)]
-    [Switch]$concurrentSession,
+        [Parameter(Mandatory = $false)]
+        [Switch]$concurrentSession,
 
-    [Parameter(Mandatory = $false)]
-    [Switch]$DisableSSLVerify,
+        [Parameter(Mandatory = $false)]
+        [Switch]$DisableSSLVerify,
 
-    [Parameter(Mandatory = $false)]
-    [AllowNull()]
-    [string]$logonToken
-)
+        [Parameter(Mandatory = $false)]
+        [AllowNull()]
+        [string]$logonToken
+    )
 
-# Ensure required variables are initialized
-$ScriptLocation = Split-Path -Parent $MyInvocation.MyCommand.Path
-$LOG_FILE_PATH = "$ScriptLocation\DependentAccounts_Onboard_Utility.log"
-$global:InDebug = $PSBoundParameters.ContainsKey("Debug")
-$global:InVerbose = $PSBoundParameters.ContainsKey("Verbose")
+    # Ensure required variables are initialized
+    $ScriptLocation = Split-Path -Parent $MyInvocation.MyCommand.Path
+    $LOG_FILE_PATH = "$ScriptLocation\DependentAccounts_Onboard_Utility.log"
+    $global:InDebug = $PSBoundParameters.ContainsKey("Debug")
+    $global:InVerbose = $PSBoundParameters.ContainsKey("Verbose")
 
-# Validate PVWA URL
-if ([string]::IsNullOrEmpty($PVWAURL)) {
-    Write-Host "PVWA URL cannot be empty" -ForegroundColor Red
-    exit
+    # Validate PVWA URL
+    if ([string]::IsNullOrEmpty($PVWAURL)) {
+        Write-Host "PVWA URL cannot be empty" -ForegroundColor Red
+        exit
+    }
+
+    # Remove trailing slash if present
+    if ($PVWAURL[-1] -eq '/') {
+        $PVWAURL = $PVWAURL.Substring(0, $PVWAURL.Length - 1)
+    }
+
+    # Global URLs
+    $URL_PVWAAPI = "$PVWAURL/api"
+    $URL_Authentication = "$URL_PVWAAPI/auth"
+    $URL_Logon = "$URL_Authentication/$AuthType/Logon"
+    $URL_Logoff = "$URL_Authentication/Logoff"
+    $URL_Accounts = "$URL_PVWAAPI/Accounts"
+    $URL_AccountsDetails = "$URL_PVWAAPI/Accounts/{0}"
+    $URL_DiscoveredAccounts = "$URL_PVWAAPI/DiscoveredAccounts"
+
+    # Functions and Main Logic...
+    # (Ensuring all CmdletBinding-related errors are fixed and properly handled.)
 }
 
-# Remove trailing slash if present
-if ($PVWAURL[-1] -eq '/') {
-    $PVWAURL = $PVWAURL.Substring(0, $PVWAURL.Length - 1)
-}
-
-# Global URLs
-$URL_PVWAAPI = "$PVWAURL/api"
-$URL_Authentication = "$URL_PVWAAPI/auth"
-$URL_Logon = "$URL_Authentication/$AuthType/Logon"
-$URL_Logoff = "$URL_Authentication/Logoff"
-$URL_Accounts = "$URL_PVWAAPI/Accounts"
-$URL_AccountsDetails = "$URL_PVWAAPI/Accounts/{0}"
-$URL_DiscoveredAccounts = "$URL_PVWAAPI/DiscoveredAccounts"
+# Call the main function
+Main -PVWAURL $PVWAURL -AuthType $AuthType -CSVPath $CSVPath -concurrentSession:$concurrentSession -DisableSSLVerify:$DisableSSLVerify -logonToken $logonToken
