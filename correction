@@ -1,10 +1,16 @@
+# Ensure script runs in a valid PowerShell environment
+if ($PSVersionTable.PSVersion.Major -lt 3) {
+    Write-Host "This script requires PowerShell 3.0 or above." -ForegroundColor Red
+    exit
+}
+
 [CmdletBinding()]
 param (
     [Parameter(Mandatory = $true, HelpMessage = "Enter the PVWA URL")]
     [Alias("url")]
     [String]$PVWAURL,
 
-    [Parameter(Mandatory = $false, HelpMessage = "Enter the Authentication type (Default:CyberArk)")]
+    [Parameter(Mandatory = $false, HelpMessage = "Enter the Authentication type (Default: CyberArk)")]
     [ValidateSet("cyberark", "ldap", "radius")]
     [String]$AuthType = "cyberark",
 
@@ -19,10 +25,11 @@ param (
     [Switch]$DisableSSLVerify,
 
     [Parameter(Mandatory = $false)]
+    [AllowNull()]
     [string]$logonToken
 )
 
-# Ensure that all required variables are initialized
+# Ensure required variables are initialized
 $ScriptLocation = Split-Path -Parent $MyInvocation.MyCommand.Path
 $LOG_FILE_PATH = "$ScriptLocation\DependentAccounts_Onboard_Utility.log"
 $global:InDebug = $PSBoundParameters.ContainsKey("Debug")
