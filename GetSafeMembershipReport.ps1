@@ -83,7 +83,7 @@ foreach ($Safe in $Safes) {
 }
 
 # Step 4: Export Safe Member Report to CSV
-$CsvFilePath = "C:\Path\To\SafeMemberReport.csv"  # Update this path as needed
+$CsvFilePath = "E:\Installation Media\RemovePendingAccount\SafeMemberReport.csv"  # Update this path as needed
 $SafeMembersReport | Export-Csv -Path $CsvFilePath -NoTypeInformation
 
 Write-Log "✅ Safe Member Report successfully exported to: $CsvFilePath"
