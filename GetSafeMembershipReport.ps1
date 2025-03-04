@@ -45,6 +45,7 @@ foreach ($Safe in $Safes) {
     Write-Log "🔹 Retrieving members for Safe: ${SafeName}"
 
     try {
+        # Fetch Safe Members using Get-PASSafeMember
         $SafeMembers = Get-PASSafeMember -SafeName $SafeName
 
         if ($SafeMembers.Count -eq 0) {
@@ -52,33 +53,33 @@ foreach ($Safe in $Safes) {
         }
 
         foreach ($Member in $SafeMembers) {
-            # Store data with True/False for each permission
+            # Ensure permission values are directly fetched from the API response
             $SafeMembersReport += [PSCustomObject]@{
                 SafeName                                    = $SafeName
-                Member                                      = $Member.memberName
-                MemberType                                  = $Member.memberType
-                UseAccounts                                = [bool]$Member.UseAccounts
-                RetrieveAccounts                           = [bool]$Member.RetrieveAccounts
-                ListAccounts                               = [bool]$Member.ListAccounts
-                AddAccounts                                = [bool]$Member.AddAccounts
-                UpdateAccountContent                      = [bool]$Member.UpdateAccountContent
-                UpdateAccountProperties                   = [bool]$Member.UpdateAccountProperties
-                InitiateCPMAccountManagementOperations    = [bool]$Member.InitiateCPMAccountManagementOperations
-                SpecifyNextAccountContent                 = [bool]$Member.SpecifyNextAccountContent
-                RenameAccounts                            = [bool]$Member.RenameAccounts
-                DeleteAccounts                            = [bool]$Member.DeleteAccounts
-                UnlockAccounts                            = [bool]$Member.UnlockAccounts
-                ManageSafe                                = [bool]$Member.ManageSafe
-                ManageSafeMembers                         = [bool]$Member.ManageSafeMembers
-                BackupSafe                                = [bool]$Member.BackupSafe
-                ViewAuditLog                              = [bool]$Member.ViewAuditLog
-                ViewSafeMembers                           = [bool]$Member.ViewSafeMembers
-                AccessWithoutConfirmation                 = [bool]$Member.AccessWithoutConfirmation
-                CreateFolders                             = [bool]$Member.CreateFolders
-                DeleteFolders                             = [bool]$Member.DeleteFolders
-                MoveAccountsAndFolders                    = [bool]$Member.MoveAccountsAndFolders
-                RequestsAuthorizationLevel1              = [bool]$Member.RequestsAuthorizationLevel1
-                RequestsAuthorizationLevel2              = [bool]$Member.RequestsAuthorizationLevel2
+                Member                                      = $Member.MemberName
+                MemberType                                  = $Member.MemberType
+                UseAccounts                                = $Member.Permissions.useAccounts
+                RetrieveAccounts                           = $Member.Permissions.retrieveAccounts
+                ListAccounts                               = $Member.Permissions.listAccounts
+                AddAccounts                                = $Member.Permissions.addAccounts
+                UpdateAccountContent                      = $Member.Permissions.updateAccountContent
+                UpdateAccountProperties                   = $Member.Permissions.updateAccountProperties
+                InitiateCPMAccountManagementOperations    = $Member.Permissions.initiateCPMAccountManagementOperations
+                SpecifyNextAccountContent                 = $Member.Permissions.specifyNextAccountContent
+                RenameAccounts                            = $Member.Permissions.renameAccounts
+                DeleteAccounts                            = $Member.Permissions.deleteAccounts
+                UnlockAccounts                            = $Member.Permissions.unlockAccounts
+                ManageSafe                                = $Member.Permissions.manageSafe
+                ManageSafeMembers                         = $Member.Permissions.manageSafeMembers
+                BackupSafe                                = $Member.Permissions.backupSafe
+                ViewAuditLog                              = $Member.Permissions.viewAuditLog
+                ViewSafeMembers                           = $Member.Permissions.viewSafeMembers
+                AccessWithoutConfirmation                 = $Member.Permissions.accessWithoutConfirmation
+                CreateFolders                             = $Member.Permissions.createFolders
+                DeleteFolders                             = $Member.Permissions.deleteFolders
+                MoveAccountsAndFolders                    = $Member.Permissions.moveAccountsAndFolders
+                RequestsAuthorizationLevel1              = $Member.Permissions.requestsAuthorizationLevel1
+                RequestsAuthorizationLevel2              = $Member.Permissions.requestsAuthorizationLevel2
             }
         }
         Write-Log "✅ Retrieved $($SafeMembers.Count) members for Safe: ${SafeName}"
