@@ -1,14 +1,23 @@
 # Import the psPAS Module
 Import-Module psPAS
 
-# Define Log File
-$LogFile = "SafeMemberReportLog.txt"
+# Define Log Files
+$LogFile = "SafeMemberAdditionLog.txt"
+$FailedLogFile = "FailToAddSafeMember.txt"
+
 Function Write-Log {
     Param ([string]$Message)
     $Timestamp = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
     $LogEntry = "$Timestamp - $Message"
     Add-Content -Path $LogFile -Value $LogEntry
     Write-Output $LogEntry
+}
+
+Function Write-FailLog {
+    Param ([string]$SafeName, [string]$MemberName)
+    $FailedEntry = "$SafeName,$MemberName"
+    Add-Content -Path $FailedLogFile -Value $FailedEntry
+    Write-Output "❌ Failed to add/update Safe member: $SafeName - $MemberName"
 }
 
 # Step 1: Authenticate Using psPAS
@@ -27,70 +36,90 @@ if ($session) {
     exit
 }
 
-# Step 2: Retrieve All Safes
-Write-Log "Retrieving list of Safes..."
-try {
-    $Safes = Get-PASSafe
-    Write-Log "✅ Retrieved $($Safes.Count) Safes."
-} catch {
-    Write-Log "❌ ERROR: Failed to retrieve Safes - $_"
+# Step 2: Load the CSV File with Safe Members to Add/Update
+$CsvFilePath = "E:\Installation Media\RemovePendingAccount\SafeMembersToAdd.csv"  # Update this path as needed
+
+if (!(Test-Path $CsvFilePath)) {
+    Write-Log "❌ ERROR: CSV file not found at $CsvFilePath. Exiting script."
     exit
 }
 
-# Step 3: Retrieve Safe Members and Permissions
-$SafeMembersReport = @()
+$SafeMembersToAdd = Import-Csv -Path $CsvFilePath
 
-foreach ($Safe in $Safes) {
-    $SafeName = $Safe.safeName
-    Write-Log "🔹 Retrieving members for Safe: ${SafeName}"
+if ($SafeMembersToAdd.Count -eq 0) {
+    Write-Log "❌ ERROR: No Safe members found in the CSV file. Exiting script."
+    exit
+}
+
+Write-Log "✅ Loaded $($SafeMembersToAdd.Count) Safe members from CSV for processing."
+
+# Step 3: Process Safe Members
+foreach ($Entry in $SafeMembersToAdd) {
+    $SafeName = $Entry.SafeName
+    $MemberName = $Entry.MemberName
+    $SearchIn = $Entry.SearchIn  # e.g., "Vault", "LDAP"
+    
+    if (-not $SafeName -or -not $MemberName) {
+        Write-Log "⚠️ WARNING: Missing SafeName or MemberName in CSV. Skipping..."
+        continue
+    }
+
+    # Step 3a: Check if Safe Exists
+    $SafeExists = Get-PASSafe -SafeName $SafeName -ErrorAction SilentlyContinue
+    if (-not $SafeExists) {
+        Write-Log "❌ ERROR: Safe $SafeName does not exist. Skipping..."
+        Write-FailLog -SafeName $SafeName -MemberName $MemberName
+        continue
+    }
+
+    Write-Log "🔹 Processing Safe: $SafeName for Member: $MemberName"
+
+    # Step 3b: Check if Member Already Exists
+    $ExistingMember = Get-PASSafeMember -SafeName $SafeName | Where-Object { $_.MemberName -eq $MemberName }
 
     try {
-        # Fetch Safe Members using Get-PASSafeMember
-        $SafeMembers = Get-PASSafeMember -SafeName $SafeName
-
-        if ($SafeMembers.Count -eq 0) {
-            Write-Log "⚠️ No members found for Safe: ${SafeName}"
+        # Define permission structure from CSV
+        $Permissions = @{
+            UseAccounts                              = [bool]$Entry.UseAccounts
+            RetrieveAccounts                         = [bool]$Entry.RetrieveAccounts
+            ListAccounts                             = [bool]$Entry.ListAccounts
+            AddAccounts                              = [bool]$Entry.AddAccounts
+            UpdateAccountContent                     = [bool]$Entry.UpdateAccountContent
+            UpdateAccountProperties                  = [bool]$Entry.UpdateAccountProperties
+            InitiateCPMAccountManagementOperations   = [bool]$Entry.InitiateCPMAccountManagementOperations
+            SpecifyNextAccountContent                = [bool]$Entry.SpecifyNextAccountContent
+            RenameAccounts                           = [bool]$Entry.RenameAccounts
+            DeleteAccounts                           = [bool]$Entry.DeleteAccounts
+            UnlockAccounts                           = [bool]$Entry.UnlockAccounts
+            ManageSafe                               = [bool]$Entry.ManageSafe
+            ManageSafeMembers                        = [bool]$Entry.ManageSafeMembers
+            BackupSafe                               = [bool]$Entry.BackupSafe
+            ViewAuditLog                             = [bool]$Entry.ViewAuditLog
+            ViewSafeMembers                          = [bool]$Entry.ViewSafeMembers
+            AccessWithoutConfirmation                = [bool]$Entry.AccessWithoutConfirmation
+            CreateFolders                            = [bool]$Entry.CreateFolders
+            DeleteFolders                            = [bool]$Entry.DeleteFolders
+            MoveAccountsAndFolders                   = [bool]$Entry.MoveAccountsAndFolders
+            RequestsAuthorizationLevel1              = [bool]$Entry.RequestsAuthorizationLevel1
+            RequestsAuthorizationLevel2              = [bool]$Entry.RequestsAuthorizationLevel2
+            MembershipExpirationDate                 = if ($Entry.MembershipExpirationDate -ne "") { [datetime]$Entry.MembershipExpirationDate } else { $null }
         }
 
-        foreach ($Member in $SafeMembers) {
-            # Ensure permission values are directly fetched from the API response
-            $SafeMembersReport += [PSCustomObject]@{
-                SafeName                                    = $SafeName
-                Member                                      = $Member.MemberName
-                MemberType                                  = $Member.MemberType
-                UseAccounts                                = $Member.Permissions.useAccounts
-                RetrieveAccounts                           = $Member.Permissions.retrieveAccounts
-                ListAccounts                               = $Member.Permissions.listAccounts
-                AddAccounts                                = $Member.Permissions.addAccounts
-                UpdateAccountContent                      = $Member.Permissions.updateAccountContent
-                UpdateAccountProperties                   = $Member.Permissions.updateAccountProperties
-                InitiateCPMAccountManagementOperations    = $Member.Permissions.initiateCPMAccountManagementOperations
-                SpecifyNextAccountContent                 = $Member.Permissions.specifyNextAccountContent
-                RenameAccounts                            = $Member.Permissions.renameAccounts
-                DeleteAccounts                            = $Member.Permissions.deleteAccounts
-                UnlockAccounts                            = $Member.Permissions.unlockAccounts
-                ManageSafe                                = $Member.Permissions.manageSafe
-                ManageSafeMembers                         = $Member.Permissions.manageSafeMembers
-                BackupSafe                                = $Member.Permissions.backupSafe
-                ViewAuditLog                              = $Member.Permissions.viewAuditLog
-                ViewSafeMembers                           = $Member.Permissions.viewSafeMembers
-                AccessWithoutConfirmation                 = $Member.Permissions.accessWithoutConfirmation
-                CreateFolders                             = $Member.Permissions.createFolders
-                DeleteFolders                             = $Member.Permissions.deleteFolders
-                MoveAccountsAndFolders                    = $Member.Permissions.moveAccountsAndFolders
-                RequestsAuthorizationLevel1              = $Member.Permissions.requestsAuthorizationLevel1
-                RequestsAuthorizationLevel2              = $Member.Permissions.requestsAuthorizationLevel2
-            }
+        if ($ExistingMember) {
+            # Update existing member permissions
+            Set-PASSafeMember -SafeName $SafeName -MemberName $MemberName -Permissions $Permissions
+            Write-Log "✅ Updated Member: $MemberName in Safe: $SafeName"
+        } else {
+            # Add new member
+            Add-PASSafeMember -SafeName $SafeName -MemberName $MemberName -SearchIn $SearchIn -Permissions $Permissions
+            Write-Log "✅ Added Member: $MemberName to Safe: $SafeName"
         }
-        Write-Log "✅ Retrieved $($SafeMembers.Count) members for Safe: ${SafeName}"
+
     } catch {
-        Write-Log "❌ ERROR: Failed to retrieve members for Safe: ${SafeName} - $_"
+        Write-Log "❌ ERROR: Failed to add/update Member: $MemberName in Safe: $SafeName - $_"
+        Write-FailLog -SafeName $SafeName -MemberName $MemberName
     }
 }
 
-# Step 4: Export Safe Member Report to CSV
-$CsvFilePath = "E:\Installation Media\RemovePendingAccount\SafeMemberReport.csv"  # Update this path as needed
-$SafeMembersReport | Export-Csv -Path $CsvFilePath -NoTypeInformation
-
-Write-Log "✅ Safe Member Report successfully exported to: $CsvFilePath"
-Write-Log "🔹 Safe Member Report generation completed."
+Write-Log "🔹 Safe member addition/update process completed."
+Write-Log "📌 Check $FailedLogFile for any failed operations."
