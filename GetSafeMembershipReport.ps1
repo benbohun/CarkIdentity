@@ -95,42 +95,43 @@ foreach ($Entry in $SafeMembersToAdd) {
 
     try {
         if ($ExistingMember) {
-            # Update existing member permissions
-            Set-PASSafeMember -SafeName $SafeName -MemberName $MemberName `
-                -SearchIn $SearchIn `
-                -UseAccounts (Convert-ToBool $Entry.UseAccounts) `
-                -RetrieveAccounts (Convert-ToBool $Entry.RetrieveAccounts) `
-                -ListAccounts (Convert-ToBool $Entry.ListAccounts) `
-                -AddAccounts (Convert-ToBool $Entry.AddAccounts) `
-                -InitiateCPMAccountManagementOperations (Convert-ToBool $Entry.InitiateCPMAccountManagementOperations) `
-                -SpecifyNextAccountContent (Convert-ToBool $Entry.SpecifyNextAccountContent) `
-                -RenameAccounts (Convert-ToBool $Entry.RenameAccounts) `
-                -DeleteAccounts (Convert-ToBool $Entry.DeleteAccounts) `
-                -UnlockAccounts (Convert-ToBool $Entry.UnlockAccounts) `
-                -ManageSafe (Convert-ToBool $Entry.ManageSafe) `
-                -BackupSafe (Convert-ToBool $Entry.BackupSafe) `
-                -ViewAuditLog (Convert-ToBool $Entry.ViewAuditLog) `
-                -ViewSafeMembers (Convert-ToBool $Entry.ViewSafeMembers) `
-                -AccessWithoutConfirmation (Convert-ToBool $Entry.AccessWithoutConfirmation)
+            # Update existing member permissions using Gen2 Syntax
+            Set-PASSafeMember -SafeName $SafeName -MemberName $MemberName -SearchIn $SearchIn -Permissions @{
+                useAccounts = (Convert-ToBool $Entry.UseAccounts)
+                retrieveAccounts = (Convert-ToBool $Entry.RetrieveAccounts)
+                listAccounts = (Convert-ToBool $Entry.ListAccounts)
+                addAccounts = (Convert-ToBool $Entry.AddAccounts)
+                initiateCPMAccountManagementOperations = (Convert-ToBool $Entry.InitiateCPMAccountManagementOperations)
+                specifyNextAccountContent = (Convert-ToBool $Entry.SpecifyNextAccountContent)
+                renameAccounts = (Convert-ToBool $Entry.RenameAccounts)
+                deleteAccounts = (Convert-ToBool $Entry.DeleteAccounts)
+                unlockAccounts = (Convert-ToBool $Entry.UnlockAccounts)
+                manageSafe = (Convert-ToBool $Entry.ManageSafe)
+                backupSafe = (Convert-ToBool $Entry.BackupSafe)
+                viewAuditLog = (Convert-ToBool $Entry.ViewAuditLog)
+                viewSafeMembers = (Convert-ToBool $Entry.ViewSafeMembers)
+                accessWithoutConfirmation = (Convert-ToBool $Entry.AccessWithoutConfirmation)
+            }
 
             Write-Log "✅ Updated Member: $MemberName in Safe: $SafeName"
         } else {
-            # Add new member with explicit permissions
-            Add-PASSafeMember -SafeName $SafeName -MemberName $MemberName -SearchIn $SearchIn `
-                -UseAccounts (Convert-ToBool $Entry.UseAccounts) `
-                -RetrieveAccounts (Convert-ToBool $Entry.RetrieveAccounts) `
-                -ListAccounts (Convert-ToBool $Entry.ListAccounts) `
-                -AddAccounts (Convert-ToBool $Entry.AddAccounts) `
-                -InitiateCPMAccountManagementOperations (Convert-ToBool $Entry.InitiateCPMAccountManagementOperations) `
-                -SpecifyNextAccountContent (Convert-ToBool $Entry.SpecifyNextAccountContent) `
-                -RenameAccounts (Convert-ToBool $Entry.RenameAccounts) `
-                -DeleteAccounts (Convert-ToBool $Entry.DeleteAccounts) `
-                -UnlockAccounts (Convert-ToBool $Entry.UnlockAccounts) `
-                -ManageSafe (Convert-ToBool $Entry.ManageSafe) `
-                -BackupSafe (Convert-ToBool $Entry.BackupSafe) `
-                -ViewAuditLog (Convert-ToBool $Entry.ViewAuditLog) `
-                -ViewSafeMembers (Convert-ToBool $Entry.ViewSafeMembers) `
-                -AccessWithoutConfirmation (Convert-ToBool $Entry.AccessWithoutConfirmation)
+            # Add new member with explicit permissions using Gen2 Syntax
+            Add-PASSafeMember -SafeName $SafeName -MemberName $MemberName -SearchIn $SearchIn -Permissions @{
+                useAccounts = (Convert-ToBool $Entry.UseAccounts)
+                retrieveAccounts = (Convert-ToBool $Entry.RetrieveAccounts)
+                listAccounts = (Convert-ToBool $Entry.ListAccounts)
+                addAccounts = (Convert-ToBool $Entry.AddAccounts)
+                initiateCPMAccountManagementOperations = (Convert-ToBool $Entry.InitiateCPMAccountManagementOperations)
+                specifyNextAccountContent = (Convert-ToBool $Entry.SpecifyNextAccountContent)
+                renameAccounts = (Convert-ToBool $Entry.RenameAccounts)
+                deleteAccounts = (Convert-ToBool $Entry.DeleteAccounts)
+                unlockAccounts = (Convert-ToBool $Entry.UnlockAccounts)
+                manageSafe = (Convert-ToBool $Entry.ManageSafe)
+                backupSafe = (Convert-ToBool $Entry.BackupSafe)
+                viewAuditLog = (Convert-ToBool $Entry.ViewAuditLog)
+                viewSafeMembers = (Convert-ToBool $Entry.ViewSafeMembers)
+                accessWithoutConfirmation = (Convert-ToBool $Entry.AccessWithoutConfirmation)
+            }
 
             Write-Log "✅ Added Member: $MemberName to Safe: $SafeName"
         }
