@@ -97,14 +97,18 @@ foreach ($Entry in $SafeMembersToAdd) {
         if ($ExistingMember) {
             # Update existing member permissions
             Set-PASSafeMember -SafeName $SafeName -MemberName $MemberName `
+                -SearchIn $SearchIn `
                 -UseAccounts (Convert-ToBool $Entry.UseAccounts) `
                 -RetrieveAccounts (Convert-ToBool $Entry.RetrieveAccounts) `
                 -ListAccounts (Convert-ToBool $Entry.ListAccounts) `
                 -AddAccounts (Convert-ToBool $Entry.AddAccounts) `
-                -UpdateAccountContent (Convert-ToBool $Entry.UpdateAccountContent) `
-                -UpdateAccountProperties (Convert-ToBool $Entry.UpdateAccountProperties) `
+                -InitiateCPMAccountManagementOperations (Convert-ToBool $Entry.InitiateCPMAccountManagementOperations) `
+                -SpecifyNextAccountContent (Convert-ToBool $Entry.SpecifyNextAccountContent) `
+                -RenameAccounts (Convert-ToBool $Entry.RenameAccounts) `
+                -DeleteAccounts (Convert-ToBool $Entry.DeleteAccounts) `
+                -UnlockAccounts (Convert-ToBool $Entry.UnlockAccounts) `
                 -ManageSafe (Convert-ToBool $Entry.ManageSafe) `
-                -ManageSafeMembers (Convert-ToBool $Entry.ManageSafeMembers) `
+                -BackupSafe (Convert-ToBool $Entry.BackupSafe) `
                 -ViewAuditLog (Convert-ToBool $Entry.ViewAuditLog) `
                 -ViewSafeMembers (Convert-ToBool $Entry.ViewSafeMembers) `
                 -AccessWithoutConfirmation (Convert-ToBool $Entry.AccessWithoutConfirmation)
@@ -117,10 +121,13 @@ foreach ($Entry in $SafeMembersToAdd) {
                 -RetrieveAccounts (Convert-ToBool $Entry.RetrieveAccounts) `
                 -ListAccounts (Convert-ToBool $Entry.ListAccounts) `
                 -AddAccounts (Convert-ToBool $Entry.AddAccounts) `
-                -UpdateAccountContent (Convert-ToBool $Entry.UpdateAccountContent) `
-                -UpdateAccountProperties (Convert-ToBool $Entry.UpdateAccountProperties) `
+                -InitiateCPMAccountManagementOperations (Convert-ToBool $Entry.InitiateCPMAccountManagementOperations) `
+                -SpecifyNextAccountContent (Convert-ToBool $Entry.SpecifyNextAccountContent) `
+                -RenameAccounts (Convert-ToBool $Entry.RenameAccounts) `
+                -DeleteAccounts (Convert-ToBool $Entry.DeleteAccounts) `
+                -UnlockAccounts (Convert-ToBool $Entry.UnlockAccounts) `
                 -ManageSafe (Convert-ToBool $Entry.ManageSafe) `
-                -ManageSafeMembers (Convert-ToBool $Entry.ManageSafeMembers) `
+                -BackupSafe (Convert-ToBool $Entry.BackupSafe) `
                 -ViewAuditLog (Convert-ToBool $Entry.ViewAuditLog) `
                 -ViewSafeMembers (Convert-ToBool $Entry.ViewSafeMembers) `
                 -AccessWithoutConfirmation (Convert-ToBool $Entry.AccessWithoutConfirmation)
