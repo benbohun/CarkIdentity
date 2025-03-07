@@ -20,6 +20,13 @@ Function Write-FailLog {
     Write-Output "❌ Failed to add/update Safe member: $SafeName - $MemberName"
 }
 
+# Function to convert string values to boolean
+Function Convert-ToBool ($Value) {
+    if ($Value -match "^(True|1)$") { return $true }
+    elseif ($Value -match "^(False|0)$") { return $false }
+    else { return $false }  # Default to false if invalid
+}
+
 # Step 1: Authenticate Using psPAS
 Write-Log "Requesting CyberArk PAS authentication..."
 $header = Get-IdentityHeader -IdentityTenantURL "aat4012.id.cyberark.cloud" -psPASFormat -PCloudSubdomain "cna-prod" -UPCreds $UPCred
@@ -92,55 +99,50 @@ foreach ($Entry in $SafeMembersToAdd) {
         if ($ExistingMember) {
             # Update existing member permissions
             Set-PASSafeMember -SafeName $SafeName -MemberName $MemberName `
-                -UseAccounts $Entry.UseAccounts `
-                -RetrieveAccounts $Entry.RetrieveAccounts `
-                -ListAccounts $Entry.ListAccounts `
-                -AddAccounts $Entry.AddAccounts `
-                -UpdateAccountContent $Entry.UpdateAccountContent `
-                -UpdateAccountProperties $Entry.UpdateAccountProperties `
-                -InitiateCPMAccountManagementOperations $Entry.InitiateCPMAccountManagementOperations `
-                -SpecifyNextAccountContent $Entry.SpecifyNextAccountContent `
-                -RenameAccounts $Entry.RenameAccounts `
-                -DeleteAccounts $Entry.DeleteAccounts `
-                -UnlockAccounts $Entry.UnlockAccounts `
-                -ManageSafe $Entry.ManageSafe `
-                -ManageSafeMembers $Entry.ManageSafeMembers `
-                -BackupSafe $Entry.BackupSafe `
-                -ViewAuditLog $Entry.ViewAuditLog `
-                -ViewSafeMembers $Entry.ViewSafeMembers `
-                -AccessWithoutConfirmation $Entry.AccessWithoutConfirmation `
-                -CreateFolders $Entry.CreateFolders `
-                -DeleteFolders $Entry.DeleteFolders `
-                -MoveAccountsAndFolders $Entry.MoveAccountsAndFolders `
-                -RequestsAuthorizationLevel1 $Entry.RequestsAuthorizationLevel1 `
-                -RequestsAuthorizationLevel2 $Entry.RequestsAuthorizationLevel2
+                -UseAccounts (Convert-ToBool $Entry.UseAccounts) `
+                -RetrieveAccounts (Convert-ToBool $Entry.RetrieveAccounts) `
+                -ListAccounts (Convert-ToBool $Entry.ListAccounts) `
+                -AddAccounts (Convert-ToBool $Entry.AddAccounts) `
+                -UpdateAccountContent (Convert-ToBool $Entry.UpdateAccountContent) `
+                -UpdateAccountProperties (Convert-ToBool $Entry.UpdateAccountProperties) `
+                -InitiateCPMAccountManagementOperations (Convert-ToBool $Entry.InitiateCPMAccountManagementOperations) `
+                -SpecifyNextAccountContent (Convert-ToBool $Entry.SpecifyNextAccountContent) `
+                -RenameAccounts (Convert-ToBool $Entry.RenameAccounts) `
+                -DeleteAccounts (Convert-ToBool $Entry.DeleteAccounts) `
+                -UnlockAccounts (Convert-ToBool $Entry.UnlockAccounts) `
+                -ManageSafe (Convert-ToBool $Entry.ManageSafe) `
+                -ManageSafeMembers (Convert-ToBool $Entry.ManageSafeMembers) `
+                -BackupSafe (Convert-ToBool $Entry.BackupSafe) `
+                -ViewAuditLog (Convert-ToBool $Entry.ViewAuditLog) `
+                -ViewSafeMembers (Convert-ToBool $Entry.ViewSafeMembers) `
+                -AccessWithoutConfirmation (Convert-ToBool $Entry.AccessWithoutConfirmation) `
+                -CreateFolders (Convert-ToBool $Entry.CreateFolders) `
+                -DeleteFolders (Convert-ToBool $Entry.DeleteFolders) `
+                -MoveAccountsAndFolders (Convert-ToBool $Entry.MoveAccountsAndFolders) `
+                -RequestsAuthorizationLevel1 (Convert-ToBool $Entry.RequestsAuthorizationLevel1) `
+                -RequestsAuthorizationLevel2 (Convert-ToBool $Entry.RequestsAuthorizationLevel2)
 
             Write-Log "✅ Updated Member: $MemberName in Safe: $SafeName"
         } else {
             # Add new member
             Add-PASSafeMember -SafeName $SafeName -MemberName $MemberName -SearchIn $SearchIn `
-                -UseAccounts $Entry.UseAccounts `
-                -RetrieveAccounts $Entry.RetrieveAccounts `
-                -ListAccounts $Entry.ListAccounts `
-                -AddAccounts $Entry.AddAccounts `
-                -UpdateAccountContent $Entry.UpdateAccountContent `
-                -UpdateAccountProperties $Entry.UpdateAccountProperties `
-                -InitiateCPMAccountManagementOperations $Entry.InitiateCPMAccountManagementOperations `
-                -SpecifyNextAccountContent $Entry.SpecifyNextAccountContent `
-                -RenameAccounts $Entry.RenameAccounts `
-                -DeleteAccounts $Entry.DeleteAccounts `
-                -UnlockAccounts $Entry.UnlockAccounts `
-                -ManageSafe $Entry.ManageSafe `
-                -ManageSafeMembers $Entry.ManageSafeMembers `
-                -BackupSafe $Entry.BackupSafe `
-                -ViewAuditLog $Entry.ViewAuditLog `
-                -ViewSafeMembers $Entry.ViewSafeMembers `
-                -AccessWithoutConfirmation $Entry.AccessWithoutConfirmation `
-                -CreateFolders $Entry.CreateFolders `
-                -DeleteFolders $Entry.DeleteFolders `
-                -MoveAccountsAndFolders $Entry.MoveAccountsAndFolders `
-                -RequestsAuthorizationLevel1 $Entry.RequestsAuthorizationLevel1 `
-                -RequestsAuthorizationLevel2 $Entry.RequestsAuthorizationLevel2
+                -UseAccounts (Convert-ToBool $Entry.UseAccounts) `
+                -RetrieveAccounts (Convert-ToBool $Entry.RetrieveAccounts) `
+                -ListAccounts (Convert-ToBool $Entry.ListAccounts) `
+                -AddAccounts (Convert-ToBool $Entry.AddAccounts) `
+                -UpdateAccountContent (Convert-ToBool $Entry.UpdateAccountContent) `
+                -UpdateAccountProperties (Convert-ToBool $Entry.UpdateAccountProperties) `
+                -InitiateCPMAccountManagementOperations (Convert-ToBool $Entry.InitiateCPMAccountManagementOperations) `
+                -SpecifyNextAccountContent (Convert-ToBool $Entry.SpecifyNextAccountContent) `
+                -RenameAccounts (Convert-ToBool $Entry.RenameAccounts) `
+                -DeleteAccounts (Convert-ToBool $Entry.DeleteAccounts) `
+                -UnlockAccounts (Convert-ToBool $Entry.UnlockAccounts) `
+                -ManageSafe (Convert-ToBool $Entry.ManageSafe) `
+                -ManageSafeMembers (Convert-ToBool $Entry.ManageSafeMembers) `
+                -BackupSafe (Convert-ToBool $Entry.BackupSafe) `
+                -ViewAuditLog (Convert-ToBool $Entry.ViewAuditLog) `
+                -ViewSafeMembers (Convert-ToBool $Entry.ViewSafeMembers) `
+                -AccessWithoutConfirmation (Convert-ToBool $Entry.AccessWithoutConfirmation)
 
             Write-Log "✅ Added Member: $MemberName to Safe: $SafeName"
         }
@@ -152,4 +154,3 @@ foreach ($Entry in $SafeMembersToAdd) {
 }
 
 Write-Log "🔹 Safe member addition/update process completed."
-Write-Log "📌 Check $FailedLogFile for any failed operations."
