@@ -20,7 +20,7 @@ Function Write-FailLog {
     Write-Output "❌ Failed to add/update Safe member: $SafeName - $MemberName"
 }
 
-# Function to convert CSV string values ("True", "False", "1", "0") to Boolean ($true, $false)
+# Function to convert CSV values ("True", "False", "1", "0") to Boolean ($true, $false)
 Function Convert-ToBool ($Value) {
     return ($Value -match "^(?i)True|1$") # Matches "True" or "1" (case-insensitive)
 }
@@ -103,14 +103,8 @@ foreach ($Entry in $SafeMembersToAdd) {
                 -AddAccounts (Convert-ToBool $Entry.AddAccounts) `
                 -UpdateAccountContent (Convert-ToBool $Entry.UpdateAccountContent) `
                 -UpdateAccountProperties (Convert-ToBool $Entry.UpdateAccountProperties) `
-                -InitiateCPMAccountManagementOperations (Convert-ToBool $Entry.InitiateCPMAccountManagementOperations) `
-                -SpecifyNextAccountContent (Convert-ToBool $Entry.SpecifyNextAccountContent) `
-                -RenameAccounts (Convert-ToBool $Entry.RenameAccounts) `
-                -DeleteAccounts (Convert-ToBool $Entry.DeleteAccounts) `
-                -UnlockAccounts (Convert-ToBool $Entry.UnlockAccounts) `
                 -ManageSafe (Convert-ToBool $Entry.ManageSafe) `
                 -ManageSafeMembers (Convert-ToBool $Entry.ManageSafeMembers) `
-                -BackupSafe (Convert-ToBool $Entry.BackupSafe) `
                 -ViewAuditLog (Convert-ToBool $Entry.ViewAuditLog) `
                 -ViewSafeMembers (Convert-ToBool $Entry.ViewSafeMembers) `
                 -AccessWithoutConfirmation (Convert-ToBool $Entry.AccessWithoutConfirmation)
@@ -125,14 +119,8 @@ foreach ($Entry in $SafeMembersToAdd) {
                 -AddAccounts (Convert-ToBool $Entry.AddAccounts) `
                 -UpdateAccountContent (Convert-ToBool $Entry.UpdateAccountContent) `
                 -UpdateAccountProperties (Convert-ToBool $Entry.UpdateAccountProperties) `
-                -InitiateCPMAccountManagementOperations (Convert-ToBool $Entry.InitiateCPMAccountManagementOperations) `
-                -SpecifyNextAccountContent (Convert-ToBool $Entry.SpecifyNextAccountContent) `
-                -RenameAccounts (Convert-ToBool $Entry.RenameAccounts) `
-                -DeleteAccounts (Convert-ToBool $Entry.DeleteAccounts) `
-                -UnlockAccounts (Convert-ToBool $Entry.UnlockAccounts) `
                 -ManageSafe (Convert-ToBool $Entry.ManageSafe) `
                 -ManageSafeMembers (Convert-ToBool $Entry.ManageSafeMembers) `
-                -BackupSafe (Convert-ToBool $Entry.BackupSafe) `
                 -ViewAuditLog (Convert-ToBool $Entry.ViewAuditLog) `
                 -ViewSafeMembers (Convert-ToBool $Entry.ViewSafeMembers) `
                 -AccessWithoutConfirmation (Convert-ToBool $Entry.AccessWithoutConfirmation)
