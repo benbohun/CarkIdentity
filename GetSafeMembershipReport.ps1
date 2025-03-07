@@ -82,13 +82,13 @@ foreach ($Entry in $SafeMembersToAdd) {
     # Step 3b: Check if Member Already Exists
     $ExistingMember = Get-PASSafeMember -SafeName $SafeName | Where-Object { $_.MemberName -eq $MemberName }
 
-    # Handle Membership Expiration Date (Default to null if empty)
+    # Handle Membership Expiration Date (Set to null if empty)
     $MembershipExpirationDate = $null
     if ($Entry.MembershipExpirationDate -match '^\d{4}-\d{2}-\d{2}$') {
         try {
             $MembershipExpirationDate = [datetime]::ParseExact($Entry.MembershipExpirationDate, "yyyy-MM-dd", $null)
         } catch {
-            Write-Log "⚠️ WARNING: Invalid MembershipExpirationDate for $MemberName in Safe $SafeName. Setting to empty."
+            Write-Log "⚠️ WARNING: Invalid MembershipExpirationDate for $MemberName in Safe $SafeName. Skipping date."
             $MembershipExpirationDate = $null
         }
     }
@@ -103,8 +103,14 @@ foreach ($Entry in $SafeMembersToAdd) {
                 -AddAccounts (Convert-ToBool $Entry.AddAccounts) `
                 -UpdateAccountContent (Convert-ToBool $Entry.UpdateAccountContent) `
                 -UpdateAccountProperties (Convert-ToBool $Entry.UpdateAccountProperties) `
+                -InitiateCPMAccountManagementOperations (Convert-ToBool $Entry.InitiateCPMAccountManagementOperations) `
+                -SpecifyNextAccountContent (Convert-ToBool $Entry.SpecifyNextAccountContent) `
+                -RenameAccounts (Convert-ToBool $Entry.RenameAccounts) `
+                -DeleteAccounts (Convert-ToBool $Entry.DeleteAccounts) `
+                -UnlockAccounts (Convert-ToBool $Entry.UnlockAccounts) `
                 -ManageSafe (Convert-ToBool $Entry.ManageSafe) `
                 -ManageSafeMembers (Convert-ToBool $Entry.ManageSafeMembers) `
+                -BackupSafe (Convert-ToBool $Entry.BackupSafe) `
                 -ViewAuditLog (Convert-ToBool $Entry.ViewAuditLog) `
                 -ViewSafeMembers (Convert-ToBool $Entry.ViewSafeMembers) `
                 -AccessWithoutConfirmation (Convert-ToBool $Entry.AccessWithoutConfirmation)
@@ -119,8 +125,14 @@ foreach ($Entry in $SafeMembersToAdd) {
                 -AddAccounts (Convert-ToBool $Entry.AddAccounts) `
                 -UpdateAccountContent (Convert-ToBool $Entry.UpdateAccountContent) `
                 -UpdateAccountProperties (Convert-ToBool $Entry.UpdateAccountProperties) `
+                -InitiateCPMAccountManagementOperations (Convert-ToBool $Entry.InitiateCPMAccountManagementOperations) `
+                -SpecifyNextAccountContent (Convert-ToBool $Entry.SpecifyNextAccountContent) `
+                -RenameAccounts (Convert-ToBool $Entry.RenameAccounts) `
+                -DeleteAccounts (Convert-ToBool $Entry.DeleteAccounts) `
+                -UnlockAccounts (Convert-ToBool $Entry.UnlockAccounts) `
                 -ManageSafe (Convert-ToBool $Entry.ManageSafe) `
                 -ManageSafeMembers (Convert-ToBool $Entry.ManageSafeMembers) `
+                -BackupSafe (Convert-ToBool $Entry.BackupSafe) `
                 -ViewAuditLog (Convert-ToBool $Entry.ViewAuditLog) `
                 -ViewSafeMembers (Convert-ToBool $Entry.ViewSafeMembers) `
                 -AccessWithoutConfirmation (Convert-ToBool $Entry.AccessWithoutConfirmation)
