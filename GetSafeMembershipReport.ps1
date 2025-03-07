@@ -37,7 +37,7 @@ if ($session) {
 }
 
 # Step 2: Load the CSV File with Safe Members to Add/Update
-$CsvFilePath = "E:\Installation Media\RemovePendingAccount\SafeMembersToAdd.csv"  # Update this path as needed
+$CsvFilePath = "E:\Installation Media\RemovePendingAccount\SafeMembersToAdd.csv"
 
 if (!(Test-Path $CsvFilePath)) {
     Write-Log "❌ ERROR: CSV file not found at $CsvFilePath. Exiting script."
@@ -58,7 +58,7 @@ foreach ($Entry in $SafeMembersToAdd) {
     $SafeName = $Entry.SafeName
     $MemberName = $Entry.MemberName
     $SearchIn = $Entry.SearchIn  # e.g., "Vault", "LDAP"
-    
+
     if (-not $SafeName -or -not $MemberName) {
         Write-Log "⚠️ WARNING: Missing SafeName or MemberName in CSV. Skipping..."
         continue
@@ -76,6 +76,17 @@ foreach ($Entry in $SafeMembersToAdd) {
 
     # Step 3b: Check if Member Already Exists
     $ExistingMember = Get-PASSafeMember -SafeName $SafeName | Where-Object { $_.MemberName -eq $MemberName }
+
+    # Handle Membership Expiration Date (Convert only if a valid date is provided)
+    $MembershipExpirationDate = $null
+    if ($Entry.MembershipExpirationDate -match '^\d{4}-\d{2}-\d{2}$') {
+        try {
+            $MembershipExpirationDate = [datetime]::ParseExact($Entry.MembershipExpirationDate, "yyyy-MM-dd", $null)
+        } catch {
+            Write-Log "⚠️ WARNING: Invalid MembershipExpirationDate for $MemberName in Safe $SafeName. Skipping date."
+            $MembershipExpirationDate = $null
+        }
+    }
 
     try {
         # Define permission structure from CSV
@@ -102,7 +113,11 @@ foreach ($Entry in $SafeMembersToAdd) {
             MoveAccountsAndFolders                   = [bool]$Entry.MoveAccountsAndFolders
             RequestsAuthorizationLevel1              = [bool]$Entry.RequestsAuthorizationLevel1
             RequestsAuthorizationLevel2              = [bool]$Entry.RequestsAuthorizationLevel2
-            MembershipExpirationDate                 = if ($Entry.MembershipExpirationDate -ne "") { [datetime]$Entry.MembershipExpirationDate } else { $null }
+        }
+
+        # Only add expiration date if it was correctly parsed
+        if ($MembershipExpirationDate) {
+            $Permissions["MembershipExpirationDate"] = $MembershipExpirationDate
         }
 
         if ($ExistingMember) {
