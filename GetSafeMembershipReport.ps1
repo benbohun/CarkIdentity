@@ -77,7 +77,7 @@ foreach ($Entry in $SafeMembersToAdd) {
     # Step 3b: Check if Member Already Exists
     $ExistingMember = Get-PASSafeMember -SafeName $SafeName | Where-Object { $_.MemberName -eq $MemberName }
 
-    # Handle Membership Expiration Date (Convert only if a valid date is provided)
+    # Handle Membership Expiration Date
     $MembershipExpirationDate = $null
     if ($Entry.MembershipExpirationDate -match '^\d{4}-\d{2}-\d{2}$') {
         try {
@@ -89,44 +89,59 @@ foreach ($Entry in $SafeMembersToAdd) {
     }
 
     try {
-        # Define permission structure from CSV
-        $Permissions = @{
-            UseAccounts                              = [bool]$Entry.UseAccounts
-            RetrieveAccounts                         = [bool]$Entry.RetrieveAccounts
-            ListAccounts                             = [bool]$Entry.ListAccounts
-            AddAccounts                              = [bool]$Entry.AddAccounts
-            UpdateAccountContent                     = [bool]$Entry.UpdateAccountContent
-            UpdateAccountProperties                  = [bool]$Entry.UpdateAccountProperties
-            InitiateCPMAccountManagementOperations   = [bool]$Entry.InitiateCPMAccountManagementOperations
-            SpecifyNextAccountContent                = [bool]$Entry.SpecifyNextAccountContent
-            RenameAccounts                           = [bool]$Entry.RenameAccounts
-            DeleteAccounts                           = [bool]$Entry.DeleteAccounts
-            UnlockAccounts                           = [bool]$Entry.UnlockAccounts
-            ManageSafe                               = [bool]$Entry.ManageSafe
-            ManageSafeMembers                        = [bool]$Entry.ManageSafeMembers
-            BackupSafe                               = [bool]$Entry.BackupSafe
-            ViewAuditLog                             = [bool]$Entry.ViewAuditLog
-            ViewSafeMembers                          = [bool]$Entry.ViewSafeMembers
-            AccessWithoutConfirmation                = [bool]$Entry.AccessWithoutConfirmation
-            CreateFolders                            = [bool]$Entry.CreateFolders
-            DeleteFolders                            = [bool]$Entry.DeleteFolders
-            MoveAccountsAndFolders                   = [bool]$Entry.MoveAccountsAndFolders
-            RequestsAuthorizationLevel1              = [bool]$Entry.RequestsAuthorizationLevel1
-            RequestsAuthorizationLevel2              = [bool]$Entry.RequestsAuthorizationLevel2
-        }
-
-        # Only add expiration date if it was correctly parsed
-        if ($MembershipExpirationDate) {
-            $Permissions["MembershipExpirationDate"] = $MembershipExpirationDate
-        }
-
         if ($ExistingMember) {
             # Update existing member permissions
-            Set-PASSafeMember -SafeName $SafeName -MemberName $MemberName -Permissions $Permissions
+            Set-PASSafeMember -SafeName $SafeName -MemberName $MemberName `
+                -UseAccounts $Entry.UseAccounts `
+                -RetrieveAccounts $Entry.RetrieveAccounts `
+                -ListAccounts $Entry.ListAccounts `
+                -AddAccounts $Entry.AddAccounts `
+                -UpdateAccountContent $Entry.UpdateAccountContent `
+                -UpdateAccountProperties $Entry.UpdateAccountProperties `
+                -InitiateCPMAccountManagementOperations $Entry.InitiateCPMAccountManagementOperations `
+                -SpecifyNextAccountContent $Entry.SpecifyNextAccountContent `
+                -RenameAccounts $Entry.RenameAccounts `
+                -DeleteAccounts $Entry.DeleteAccounts `
+                -UnlockAccounts $Entry.UnlockAccounts `
+                -ManageSafe $Entry.ManageSafe `
+                -ManageSafeMembers $Entry.ManageSafeMembers `
+                -BackupSafe $Entry.BackupSafe `
+                -ViewAuditLog $Entry.ViewAuditLog `
+                -ViewSafeMembers $Entry.ViewSafeMembers `
+                -AccessWithoutConfirmation $Entry.AccessWithoutConfirmation `
+                -CreateFolders $Entry.CreateFolders `
+                -DeleteFolders $Entry.DeleteFolders `
+                -MoveAccountsAndFolders $Entry.MoveAccountsAndFolders `
+                -RequestsAuthorizationLevel1 $Entry.RequestsAuthorizationLevel1 `
+                -RequestsAuthorizationLevel2 $Entry.RequestsAuthorizationLevel2
+
             Write-Log "✅ Updated Member: $MemberName in Safe: $SafeName"
         } else {
             # Add new member
-            Add-PASSafeMember -SafeName $SafeName -MemberName $MemberName -SearchIn $SearchIn -Permissions $Permissions
+            Add-PASSafeMember -SafeName $SafeName -MemberName $MemberName -SearchIn $SearchIn `
+                -UseAccounts $Entry.UseAccounts `
+                -RetrieveAccounts $Entry.RetrieveAccounts `
+                -ListAccounts $Entry.ListAccounts `
+                -AddAccounts $Entry.AddAccounts `
+                -UpdateAccountContent $Entry.UpdateAccountContent `
+                -UpdateAccountProperties $Entry.UpdateAccountProperties `
+                -InitiateCPMAccountManagementOperations $Entry.InitiateCPMAccountManagementOperations `
+                -SpecifyNextAccountContent $Entry.SpecifyNextAccountContent `
+                -RenameAccounts $Entry.RenameAccounts `
+                -DeleteAccounts $Entry.DeleteAccounts `
+                -UnlockAccounts $Entry.UnlockAccounts `
+                -ManageSafe $Entry.ManageSafe `
+                -ManageSafeMembers $Entry.ManageSafeMembers `
+                -BackupSafe $Entry.BackupSafe `
+                -ViewAuditLog $Entry.ViewAuditLog `
+                -ViewSafeMembers $Entry.ViewSafeMembers `
+                -AccessWithoutConfirmation $Entry.AccessWithoutConfirmation `
+                -CreateFolders $Entry.CreateFolders `
+                -DeleteFolders $Entry.DeleteFolders `
+                -MoveAccountsAndFolders $Entry.MoveAccountsAndFolders `
+                -RequestsAuthorizationLevel1 $Entry.RequestsAuthorizationLevel1 `
+                -RequestsAuthorizationLevel2 $Entry.RequestsAuthorizationLevel2
+
             Write-Log "✅ Added Member: $MemberName to Safe: $SafeName"
         }
 
