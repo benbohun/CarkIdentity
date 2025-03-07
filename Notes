@@ -1,3 +1,2 @@
 SafeName,MemberName,SearchIn,UseAccounts,RetrieveAccounts,ListAccounts,AddAccounts,UpdateAccountContent,UpdateAccountProperties,ManageSafe,ManageSafeMembers,ViewAuditLog,ViewSafeMembers,AccessWithoutConfirmation,MembershipExpirationDate
-FinanceSafe,JohnDoe,LDAP,True,True,False,True,True,False,True,False,True,False,True,2025-12-31
-ITSecuritySafe,ServiceAccount1,LDAP,False,False,True,True,False,False,False,True,True,False,False,
+Testingupdatesafe,CAG1896@cna.com,LDAP,True,True,False,True,True,False,True,False,True,False,True,
